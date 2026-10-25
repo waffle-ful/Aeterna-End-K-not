@@ -113,6 +113,11 @@ interface ReportBody {
     modVersion: string;
     // "lobby" / "in-game" / "meeting" — where the reporter was when they typed it.
     phase: string;
+    // Optional zip of the reporter's own logs (base64 on the wire, decoded here).
+    // Null when absent, unreadable, or over REPORT_LOG_MAX_BYTES.
+    log: Uint8Array | null;
+    // "bug" for the in-game bug report button, "" for the /report chat command.
+    kind: string;
 }
 
 interface AnnouncePublic {
@@ -181,6 +186,9 @@ const DEFAULT_REPORT_RATE_LIMIT_SECONDS = 120;
 // reporter is typing into an Among Us chat box, so anything longer is a paste bomb.
 const REPORT_TEXT_MAX = 400;
 const REPORT_NAME_MAX = 32;
+// Attached log cap. Discord rejects webhook uploads over 10 MB on an unboosted
+// server; this leaves room for the multipart envelope and the embed.
+const REPORT_LOG_MAX_BYTES = 8 * 1024 * 1024;
 
 export default {
     async fetch(req: Request, env: Env): Promise<Response> {
@@ -536,7 +544,9 @@ async function handleReport(env: Env, raw: string): Promise<Response> {
     // secret; the host log carries the status so the operator can still notice.
     if (webhook.length === 0) return ok({ status: "disabled" });
 
-    const sendResult = await postDiscordMessage(webhook, buildReportEmbed(r));
+    const sendResult = r.log
+        ? await postDiscordMessageWithFile(webhook, buildReportEmbed(r), r.log, `log-${Date.now()}.zip`)
+        : await postDiscordMessage(webhook, buildReportEmbed(r));
     // Don't burn the rate-limit key on a failed send — the reporter should be able to
     // try again immediately rather than be locked out by our own outage.
     if (!sendResult.ok) return err(502, `discord post failed: ${sendResult.error}`);
@@ -617,7 +627,25 @@ function validateReport(b: Partial<ReportBody>):
     const modVersion = sanitize(b.modVersion, 32) || "unknown";
     const phase = sanitize(b.phase, 16) || "unknown";
 
-    return { ok: true, value: { code, fcHash, reporter, reporterHash, text, region, mode, modVersion, phase } };
+    // A bad attachment never rejects the report — the text is what must not be lost.
+    const log = decodeLogZip((b as { logZip?: unknown }).logZip);
+
+    const kind = (b as { kind?: unknown }).kind === "bug" ? "bug" : "";
+
+    return { ok: true, value: { code, fcHash, reporter, reporterHash, text, region, mode, modVersion, phase, log, kind } };
+}
+
+function decodeLogZip(raw: unknown): Uint8Array | null {
+    if (typeof raw !== "string" || raw.length === 0) return null;
+    // base64 grows 4/3; reject before decoding anything that can't fit.
+    if (raw.length > Math.ceil(REPORT_LOG_MAX_BYTES / 3) * 4) return null;
+    let bin: string;
+    try { bin = atob(raw); } catch { return null; }
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    // Only a zip (local file header) is forwarded, so the channel can't be used to host arbitrary files.
+    if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b || bytes[2] !== 0x03 || bytes[3] !== 0x04) return null;
+    return bytes;
 }
 
 function sanitize(raw: unknown, max: number): string {
@@ -656,7 +684,7 @@ function buildEmbed(a: AnnouncePublic, phase: "open" | "in-game"): unknown {
 
 function buildReportEmbed(r: ReportBody): unknown {
     return {
-        title: "📮 Player Report",
+        title: r.kind === "bug" ? "🐞 Bug Report" : "📮 Player Report",
         color: COLOR_REPORT,
         description: r.text,
         fields: [
@@ -684,6 +712,17 @@ async function postDiscordMessage(webhook: string, embed: unknown): Promise<Disc
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ embeds: [embed] }),
     });
+    if (!r.ok) return { ok: false, error: `${r.status} ${await safeText(r)}` };
+    const j = await r.json() as { id?: string };
+    if (!j.id) return { ok: false, error: "discord did not return message id" };
+    return { ok: true, messageId: j.id };
+}
+
+async function postDiscordMessageWithFile(webhook: string, embed: unknown, file: Uint8Array, filename: string): Promise<DiscordPostOk | { ok: false; error: string }> {
+    const form = new FormData();
+    form.append("payload_json", JSON.stringify({ embeds: [embed], attachments: [{ id: 0, filename }] }));
+    form.append("files[0]", new Blob([file], { type: "application/zip" }), filename);
+    const r = await fetch(addQuery(webhook, "wait", "true"), { method: "POST", body: form });
     if (!r.ok) return { ok: false, error: `${r.status} ${await safeText(r)}` };
     const j = await r.json() as { id?: string };
     if (!j.id) return { ok: false, error: "discord did not return message id" };

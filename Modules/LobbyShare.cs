@@ -36,6 +36,8 @@ internal static class LobbyShare
     private const int HttpTimeoutSeconds = 8;
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds) };
+    // A report with an attached log zip is several MB; the 8s client would cut it off mid-upload.
+    private static readonly HttpClient ReportHttp = new() { Timeout = TimeSpan.FromSeconds(60) };
 
     // Throttle for /api/update — minimum interval between live player-count PATCHes.
     // Discord rate-limits PATCH on a single message; 5s leaves plenty of headroom.
@@ -261,7 +263,14 @@ internal static class LobbyShare
     // The local file write happens FIRST and unconditionally: it is the copy that
     // survives an unset webhook, a relay outage, or a source build with no secrets.
     // The relay POST is best-effort on top of it.
-    public static ReportResult SubmitReport(PlayerControl reporter, string text)
+    // Lets a caller skip expensive preparation (packing logs) when SubmitReport would refuse anyway.
+    public static bool IsReportOnCooldown(byte playerId) =>
+        LastReportAt.TryGetValue(playerId, out float last) && Time.time - last < ReportCooldownSeconds;
+
+    // logZip (optional): a zip of the reporter's own logs, already redacted by the caller.
+    // onDone (optional): called once with the relay's HTTP status (0 = saved locally only,
+    // -1 = network failure) and response body. It runs on a worker thread.
+    public static ReportResult SubmitReport(PlayerControl reporter, string text, byte[] logZip = null, Action<int, string> onDone = null, bool bugReport = false)
     {
         if (!reporter) return ReportResult.Empty;
 
@@ -289,6 +298,7 @@ internal static class LobbyShare
         if (!IsConfigured)
         {
             Logger.Info("report saved locally only (LobbyShareSecrets empty)", "LobbyShare");
+            onDone?.Invoke(0, string.Empty);
             return ReportResult.Accepted;
         }
 
@@ -307,9 +317,11 @@ internal static class LobbyShare
             mode = FormatMode(Options.CurrentGameMode),
             modVersion = Main.PluginVersion,
             phase = phase,
+            logZip = logZip is { Length: > 0 } ? Convert.ToBase64String(logZip) : null,
+            kind = bugReport ? "bug" : null,
         };
 
-        FireAndForget(PostSignedAsync("/api/report", body));
+        FireAndForget(PostSignedAsync("/api/report", body, client: body.logZip != null ? ReportHttp : null, onDone: onDone));
         return ReportResult.Accepted;
     }
 
@@ -395,7 +407,7 @@ internal static class LobbyShare
 
     // ─── HTTP ─────────────────────────────────────────────────────────────────
 
-    private static async Task PostSignedAsync(string path, object body, bool isAnnounce = false)
+    private static async Task PostSignedAsync(string path, object body, bool isAnnounce = false, HttpClient client = null, Action<int, string> onDone = null)
     {
         string json = null;
         try
@@ -409,8 +421,9 @@ internal static class LobbyShare
             req.Headers.Add("X-Timestamp", ts);
             req.Headers.Add("X-Signature", sig);
 
-            using HttpResponseMessage resp = await Http.SendAsync(req).ConfigureAwait(false);
+            using HttpResponseMessage resp = await (client ?? Http).SendAsync(req).ConfigureAwait(false);
             string respBody = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+            onDone?.Invoke((int)resp.StatusCode, respBody);
 
             if (resp.IsSuccessStatusCode)
             {
@@ -427,6 +440,7 @@ internal static class LobbyShare
         {
             Logger.Warn($"{path} exception: {ex.Message}", "LobbyShare");
             if (isAnnounce) NotifyHostOfFailure(-1, ex.Message);
+            onDone?.Invoke(-1, ex.Message);
         }
     }
 
@@ -532,6 +546,11 @@ internal static class LobbyShare
         public string mode { get; set; }
         public string modVersion { get; set; }
         public string phase { get; set; }
+        // Base64 zip of the reporter's logs. Null is left out of the JSON, so plain /report bodies are unchanged.
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public string logZip { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public string kind { get; set; }
     }
 }
 

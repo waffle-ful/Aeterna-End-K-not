@@ -41,6 +41,9 @@ internal static class ControllerManagerUpdatePatch
                 if (ClientControlGUI.Instance.IsOpen) return;
             }
 
+            // バグ報告の欄に打っている文字をホットキーとして拾わない
+            if (BugReport.IsOpen) return;
+
             if (HudManager.InstanceExists)
             {
                 if (Il2Direct.Alive(PlayerControl.LocalPlayer) && Il2Direct.Alive(PlayerControl.LocalPlayer.Collider))

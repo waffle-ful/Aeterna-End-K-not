@@ -3116,7 +3116,8 @@ public static class FixInputChatField
         bool isSearchField = GameSettingMenuPatch.InputField && __instance == GameSettingMenuPatch.InputField;
         bool isNumericField = NumericOptionInputPatch.ActiveField && __instance == NumericOptionInputPatch.ActiveField;
         bool isPostTextField = YouTubePostTextEditPatch.ActiveField && __instance == YouTubePostTextEditPatch.ActiveField;
-        if ((isSearchField || isNumericField || isPostTextField) && __instance.gameObject.activeSelf && __instance.Background && __instance.textArea)
+        bool isBugReportField = BugReport.ActiveField && __instance == BugReport.ActiveField;
+        if ((isSearchField || isNumericField || isPostTextField || isBugReportField) && __instance.gameObject.activeSelf && __instance.Background && __instance.textArea)
         {
             Vector2 size = __instance.Background.size;
             size.y = Math.Max(0.62f, __instance.textArea.TextHeight + 0.2f);
