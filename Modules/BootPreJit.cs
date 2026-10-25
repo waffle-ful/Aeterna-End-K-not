@@ -450,6 +450,35 @@ public static class BootPreJit
         private int _typeDepth;
         private Type _blockerType;
 
+        // 同じ物を何度も作らないための置き場 (1 回の走査の間だけ持つ)。メソッド本体の取り出しと
+        // トークンの解決は呼ぶたびにリフレクションの物を新しく作り、試合リスト 1 本で 100MB 級のゴミになっていた
+        private readonly Dictionary<MethodBase, byte[]> _il = [];
+        private readonly Dictionary<(Module, int), MethodBase> _methods = [];
+        private readonly Dictionary<(Module, int), FieldInfo> _fields = [];
+        private static readonly Dictionary<Assembly, bool> BclByAssembly = [];
+
+        private byte[] GetIl(MethodBase method)
+        {
+            if (_il.TryGetValue(method, out byte[] il)) return il;
+            il = method.GetMethodBody()?.GetILAsByteArray();
+            _il[method] = il;
+            return il;
+        }
+
+        private MethodBase ResolveMethod(Module module, int token, Type[] typeArgs = null, Type[] methodArgs = null)
+        {
+            if (typeArgs != null || methodArgs != null) return module.ResolveMethod(token, typeArgs, methodArgs);
+            if (!_methods.TryGetValue((module, token), out MethodBase method)) _methods[(module, token)] = method = module.ResolveMethod(token);
+            return method;
+        }
+
+        private FieldInfo ResolveField(Module module, int token, Type[] typeArgs = null, Type[] methodArgs = null)
+        {
+            if (typeArgs != null || methodArgs != null) return module.ResolveField(token, typeArgs, methodArgs);
+            if (!_fields.TryGetValue((module, token), out FieldInfo field)) _fields[(module, token)] = field = module.ResolveField(token);
+            return field;
+        }
+
         public IlScan(Assembly self, HashSet<Type> preInited)
         {
             _self = self;
@@ -523,11 +552,10 @@ public static class BootPreJit
         private string BodyBlocker(MethodBase method, int depth, bool followCalls, out bool hasLoop)
         {
             hasLoop = false;
-            MethodBody body;
-            try { body = method.GetMethodBody(); }
+            byte[] il;
+            try { il = GetIl(method); }
             catch { return "#nobody"; }
 
-            byte[] il = body?.GetILAsByteArray();
             if (il == null) return depth == 0 ? "#nobody" : null;
 
             Module module = method.Module;
@@ -575,7 +603,7 @@ public static class BootPreJit
                         if (op == OpCodes.Ldsfld || op == OpCodes.Ldsflda || op == OpCodes.Stsfld)
                         {
                             FieldInfo field;
-                            try { field = module.ResolveField(BitConverter.ToInt32(il, pos), typeArgs, methodArgs); }
+                            try { field = ResolveField(module, BitConverter.ToInt32(il, pos), typeArgs, methodArgs); }
                             catch { return "#resolve"; }
 
                             Type owner = field?.DeclaringType;
@@ -593,7 +621,7 @@ public static class BootPreJit
                         if (followCalls)
                         {
                             MethodBase callee;
-                            try { callee = module.ResolveMethod(BitConverter.ToInt32(il, pos), typeArgs, methodArgs); }
+                            try { callee = ResolveMethod(module, BitConverter.ToInt32(il, pos), typeArgs, methodArgs); }
                             catch { return "#resolve"; }
 
                             string blocker = InlineeBlocker(callee, depth + 1);
@@ -625,7 +653,7 @@ public static class BootPreJit
             else
             {
                 byte[] il = null;
-                try { il = callee.GetMethodBody()?.GetILAsByteArray(); }
+                try { il = GetIl(callee); }
                 catch { }
 
                 if (il == null) result = null;
@@ -644,8 +672,13 @@ public static class BootPreJit
 
         private static bool IsBcl(Assembly assembly)
         {
-            string name = assembly.GetName().Name;
-            return name != null && (name == "System.Private.CoreLib" || name == "netstandard" || name == "mscorlib" || name == "System" || name.StartsWith("System.", StringComparison.Ordinal));
+            lock (BclByAssembly)
+            {
+                if (BclByAssembly.TryGetValue(assembly, out bool bcl)) return bcl;
+                string name = assembly.GetName().Name;
+                bcl = name != null && (name == "System.Private.CoreLib" || name == "netstandard" || name == "mscorlib" || name == "System" || name.StartsWith("System.", StringComparison.Ordinal));
+                return BclByAssembly[assembly] = bcl;
+            }
         }
 
         // この型の初期化子を裏スレッドで走らせてよいか。
@@ -689,7 +722,7 @@ public static class BootPreJit
         private bool InitializerCallsOnly(ConstructorInfo cctor, bool earlyOnMain, bool laterJob = false)
         {
             byte[] il;
-            try { il = cctor.GetMethodBody()?.GetILAsByteArray(); }
+            try { il = GetIl(cctor); }
             catch { return false; }
 
             if (il == null) return false;
@@ -724,7 +757,7 @@ public static class BootPreJit
                     case OperandType.InlineField:
                         try
                         {
-                            FieldInfo field = module.ResolveField(BitConverter.ToInt32(il, pos));
+                            FieldInfo field = ResolveField(module, BitConverter.ToInt32(il, pos));
                             if (field?.DeclaringType == null) return false;
                             if (!earlyOnMain && field.IsStatic && field.DeclaringType != cctor.DeclaringType && !TypeOk(field.DeclaringType)) return false;
                         }
@@ -741,7 +774,7 @@ public static class BootPreJit
 
                         try
                         {
-                            MethodBase callee = module.ResolveMethod(BitConverter.ToInt32(il, pos));
+                            MethodBase callee = ResolveMethod(module, BitConverter.ToInt32(il, pos));
                             Type owner = callee?.DeclaringType;
                             if (owner == null) return false;
 
