@@ -12,5 +12,6 @@
   Unity のアロケータ設定) を指す。ファイルが無い間はゲームの boot.config がそのまま使われる
   上流の `[Environment] GC_DISABLE_INCREMENTAL=1` は外している (incremental GC の ON/OFF は mod が起動時に決める。
   この行が残っていると Unity の起動時点で OFF になり、mod からは ON に戻せない)
-  代わりに `[Environment] GC_FREE_SPACE_DIVISOR=6` を足している (ゲーム側 GC ヒープの空き余裕を 1/3 から 1/6 へ。
-  mod の設定 `CompactIl2CppHeap` を切ると次回起動から mod がこの行を外す)
+  代わりに `[Environment]` へ `GC_FREE_SPACE_DIVISOR=6` (ゲーム側 GC ヒープの空き余裕を 1/3 から 1/6 へ) と
+  `DOTNET_GCgen0MaxBudget=0x400000` (mod 側 .NET の gen0 割り当て枠の上限を 4MB へ) を足している。
+  mod の設定 `CompactGcHeaps` を切ると次回起動から mod がこの 2 行を外す)
