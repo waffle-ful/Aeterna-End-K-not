@@ -9729,6 +9729,7 @@
   "YouTubeChatSeatsScale": "Audience row size",
   "YouTubeChatSeatsSign": "AUDIENCE",
   "YouTubeChatHistoryOpen": "▶ Open comment history",
+  "YouTubeChatHistoryTitle": "YouTube chat",
   "YouTubeChat.NotEnabled": "YouTube chat overlay is disabled. Turn on \"Show YouTube live chat in HUD\" in System Settings first.",
   "YouTubeChat.Usage": "Usage: /yt <stream-url>  |  /yt off  |  /yt status  |  /yt clear",
   "LobbyCodeTickerEnable": "Show a join code sign on the stream",

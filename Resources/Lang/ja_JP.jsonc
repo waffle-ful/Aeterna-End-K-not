@@ -9041,6 +9041,7 @@
   "YouTubeChatSeatsScale": "観客席の大きさ",
   "YouTubeChatSeatsSign": "観客席",
   "YouTubeChatHistoryOpen": "▶ コメント履歴を開く",
+  "YouTubeChatHistoryTitle": "YouTube のコメント",
   "YouTubeChat.NotEnabled": "YouTubeチャット表示が無効になっています。先にシステム設定で「YouTubeライブチャットをHUDに表示」をONにしてください。",
   "YouTubeChat.Usage": "使い方: /yt <配信URL>  |  /yt off  |  /yt status  |  /yt clear",
   "LobbyCodeTickerEnable": "配信画面に参加コードの看板を出す",

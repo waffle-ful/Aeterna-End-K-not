@@ -53,7 +53,7 @@ public static class YouTubeChatOverlay
         string safeAuthor = Sanitize(author);
 
         string line = YouTubeChatOptions.ShowAuthor != null && YouTubeChatOptions.ShowAuthor.GetBool() && !string.IsNullOrEmpty(safeAuthor)
-            ? $"<color=#FFAA00>{safeAuthor}</color>: {safeText}"
+            ? $"<color=#FFAA00>{safeAuthor}</color>：{safeText}" // 半角の「: 」だと折り返しが空白で切れ、名前だけの行ができる
             : safeText;
 
         int max = YouTubeChatOptions.DisplayCount?.GetInt() ?? 5;
