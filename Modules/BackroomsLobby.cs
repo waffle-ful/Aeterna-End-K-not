@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using HarmonyLib;
@@ -3141,6 +3141,7 @@ public static partial class BackroomsLobby
     private static float _flickerNextEvalAt;
     private static float _flickerHoldUntil;
     private static bool _flickerInBlackout;
+    private static float _forcedBlackoutAlpha;
 
     private static void CreateOverlay()
     {
@@ -3585,6 +3586,17 @@ public static partial class BackroomsLobby
         BackroomsShadow.SpawnTestRoom(variant, pid);
     }
 
+    // 停電を今すぐ seconds 秒起こす (撮影用)。alpha は覆いの黒の濃さ (0 以下なら通常の停電と同じ色)。
+    // バニラ影モードでは覆いごと止まっていて見えないので false
+    internal static bool ForceBlackout(float seconds, float alpha)
+    {
+        if (_overlaySR == null || _overlaySuppressed) return false;
+        _flickerInBlackout = true;
+        _flickerHoldUntil = Time.time + seconds;
+        _forcedBlackoutAlpha = Mathf.Clamp01(alpha);
+        return true;
+    }
+
     // UpdateVision 頭から呼ばれる。idle skip の影響を受けず毎フレ走らせて flicker を維持
     private static void UpdateOverlay()
     {
@@ -3598,11 +3610,12 @@ public static partial class BackroomsLobby
             if (now >= _flickerHoldUntil)
             {
                 _flickerInBlackout = false;
+                _forcedBlackoutAlpha = 0f;
                 _flickerNextEvalAt = now + UnityEngine.Random.Range(90f, 180f);
             }
             else
             {
-                _overlaySR.color = OverlayBlackout;
+                _overlaySR.color = _forcedBlackoutAlpha > 0f ? new Color(0f, 0f, 0f, _forcedBlackoutAlpha) : OverlayBlackout;
                 return;
             }
         }

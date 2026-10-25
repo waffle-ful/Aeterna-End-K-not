@@ -17,6 +17,14 @@ public static class CleanShot
     private static float _baseOrtho = -1f;
     private static float _zoomOrtho = -1f;
 
+    // 寄り引き・ずらしの補間 (秒数指定時)。始点から終点へ smoothstep で動かす
+    private static float _zoomFrom, _zoomTo, _zoomStart, _zoomDur;
+    private static bool _zoomReset;
+    private static Vector2 _panFrom, _panTo;
+    private static float _panStart, _panDur;
+    private static bool _panActive;
+    private static Vector2 _basePan;
+
     public static void Set(bool on, bool hud = true)
     {
         if (On && (!on || _hud != hud)) RestoreHidden();
@@ -26,6 +34,7 @@ public static class CleanShot
 
         SetNoPlayers(false);
         SetZoom(0f);
+        SetPan(Vector2.zero, 0f, true);
     }
 
     // 誰もいない画を撮るために、人の姿を手元の画面だけで消す
@@ -40,10 +49,23 @@ public static class CleanShot
     }
 
     // 本編のズームは引く方向 (3 以上) だけなので、寄りはここでメインカメラの orthographicSize を直接変える。0 以下で元に戻す
-    public static void SetZoom(float ortho)
+    public static void SetZoom(float ortho, float seconds = 0f)
     {
         Camera cam = Camera.main;
         if (!cam) return;
+
+        _zoomDur = 0f;
+        if (seconds > 0f)
+        {
+            if (_baseOrtho <= 0f) _baseOrtho = cam.orthographicSize;
+            _zoomFrom = _zoomOrtho > 0f ? _zoomOrtho : cam.orthographicSize;
+            _zoomReset = ortho <= 0f;
+            _zoomTo = _zoomReset ? _baseOrtho : ortho;
+            _zoomStart = Time.time;
+            _zoomDur = seconds;
+            _zoomOrtho = _zoomFrom;
+            return;
+        }
 
         if (ortho <= 0f)
         {
@@ -58,9 +80,59 @@ public static class CleanShot
         cam.orthographicSize = ortho;
     }
 
+    // カメラの追従先を人からずらす (単位はマップ座標)。reset で元のずれへ戻す
+    public static void SetPan(Vector2 offset, float seconds, bool reset = false)
+    {
+        if (!HudManager.InstanceExists || !HudManager.Instance.PlayerCam) return;
+        FollowerCamera fc = HudManager.Instance.PlayerCam;
+
+        if (!_panActive && !reset) _basePan = fc.Offset;
+        Vector2 to = reset ? _basePan : _basePan + offset;
+        if (reset && !_panActive && _panDur <= 0f) return;
+
+        if (seconds <= 0f)
+        {
+            fc.Offset = to;
+            _panDur = 0f;
+        }
+        else
+        {
+            _panFrom = fc.Offset;
+            _panTo = to;
+            _panStart = Time.time;
+            _panDur = seconds;
+        }
+
+        _panActive = !reset;
+    }
+
+    private static float Smooth(float start, float dur)
+    {
+        float t = Mathf.Clamp01((Time.time - start) / dur);
+        return t * t * (3f - 2f * t);
+    }
+
     // 隠した後に作り直された物も拾うため、オンの間は毎回なめる
     public static void Tick()
     {
+        if (_zoomDur > 0f)
+        {
+            float k = Smooth(_zoomStart, _zoomDur);
+            _zoomOrtho = Mathf.Lerp(_zoomFrom, _zoomTo, k);
+            if (k >= 1f)
+            {
+                _zoomDur = 0f;
+                if (_zoomReset) SetZoom(0f);
+            }
+        }
+
+        if (_panDur > 0f && HudManager.InstanceExists && HudManager.Instance.PlayerCam)
+        {
+            float k = Smooth(_panStart, _panDur);
+            HudManager.Instance.PlayerCam.Offset = Vector2.Lerp(_panFrom, _panTo, k);
+            if (k >= 1f) _panDur = 0f;
+        }
+
         // 本編のズーム (生存中は寄れない) が 3 に戻すので、指定中は当て直す
         if (_zoomOrtho > 0f)
         {
