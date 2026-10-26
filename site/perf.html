@@ -143,21 +143,21 @@ const METRICS = [
   { key: 'lobby_ws',  name: 'ロビー 常駐メモリ',   unit: 'MB', dp: 0, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
     desc: '公式サーバーの非公開ロビー (ホスト単独) で静止 30 秒後から 60 秒間の Working Set 平均',
     v: { vanilla: 566, bepinex: 697, current: 749 } },
-  { key: 'lobby_low', name: 'ロビー 1% low',      unit: 'fps', dp: 1, higher: true, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
+  { key: 'lobby_low', name: 'ロビー 1% low',      unit: 'fps', dp: 1, higher: true, n: '現行 5 回・BepInEx のみ 6 回・バニラ 3 回',
     desc: '同じ 60 秒間で、遅い方から 1% のフレームの平均を fps に直した値 (上限 60fps)',
-    v: { vanilla: 57.3, bepinex: 56.5, current: 55.9 } },
-  { key: 'lobby_p95', name: 'ロビー フレーム時間 p95', unit: 'ms', dp: 2, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
+    v: { vanilla: 57.3, bepinex: 56.5, current: 56.9 } },
+  { key: 'lobby_p95', name: 'ロビー フレーム時間 p95', unit: 'ms', dp: 2, n: '現行 5 回・BepInEx のみ 6 回・バニラ 3 回',
     desc: '同じ 60 秒間のフレーム時間の 95 パーセンタイル (60fps の 1 フレームは 16.67ms)',
-    v: { vanilla: 17.04, bepinex: 17.06, current: 17.25 } },
+    v: { vanilla: 17.04, bepinex: 17.06, current: 17.12 } },
   { key: 'game_ws',   name: '試合中 常駐メモリ',   unit: 'MB', dp: 0, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
     desc: 'The Skeld で静止 30 秒後から 180 秒間の Working Set 平均。現行版は 1 人で始めた試合、バニラと BepInEx のみはフリープレイ',
     v: { vanilla: 665, bepinex: 791, current: 827 } },
-  { key: 'game_low',  name: '試合中 1% low',      unit: 'fps', dp: 1, higher: true, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
+  { key: 'game_low',  name: '試合中 1% low',      unit: 'fps', dp: 1, higher: true, n: '現行 5 回・BepInEx のみ 6 回・バニラ 3 回',
     desc: '同じ 180 秒間で、遅い方から 1% のフレームの平均を fps に直した値 (上限 60fps)',
-    v: { vanilla: 56.9, bepinex: 55.6, current: 55.0 } },
-  { key: 'game_p95',  name: '試合中 フレーム時間 p95', unit: 'ms', dp: 2, n: '現行と BepInEx のみ 6 回・バニラ 3 回',
+    v: { vanilla: 56.9, bepinex: 55.6, current: 56.15 } },
+  { key: 'game_p95',  name: '試合中 フレーム時間 p95', unit: 'ms', dp: 2, n: '現行 5 回・BepInEx のみ 6 回・バニラ 3 回',
     desc: '同じ 180 秒間のフレーム時間の 95 パーセンタイル',
-    v: { vanilla: 17.19, bepinex: 17.22, current: 17.47 } },
+    v: { vanilla: 17.19, bepinex: 17.22, current: 17.24 } },
 ];
 METRICS.forEach(m => { m.fmt = v => m.dp ? v.toFixed(m.dp) : Math.round(v).toLocaleString(); });
 
@@ -195,14 +195,14 @@ const CONDITIONS = [
   ['ロビー', '公式サーバーで非公開ロビーをホスト単独で作成し、静止 30 秒後から 60 秒'],
   ['試合中', 'The Skeld で静止 30 秒後から 180 秒。現行版は 1 人で始めた試合、バニラと BepInEx のみは 1 人で試合を始められないのでフリープレイ'],
   ['メモリ', '採取中の Working Set の平均。回ごとに出して、回の中央値を掲載'],
-  ['現行版', '0.15.1 開発版 (2026-10-26 のビルド)。配布版と同じ構成でビルドし、機能は既定設定のまま。配布版には無い開発用の告知バナーと計測用の機能を含みます'],
+  ['現行版', '0.15.1 開発版 (2026-10-26 のビルド)。配布版と同じ構成でビルドし、機能は既定設定のまま。配布版には無い開発用の告知バナーと計測用の機能を含みます。1% low とフレーム時間 p95 は、同じ日の午後にフレームの処理を軽くしたビルドで測り直した値です (起動とメモリに関わる変更は無いため、その 2 つは測り直していません)'],
   ['BepInEx のみ', 'mod DLL を外した BepInEx + Il2CppInterop の土台だけ。mod の上乗せ分を切り分けるための基準'],
 ];
 const NOTES = [
   'Working Set は OS の裁量で ±15MB 程度揺れるため、この幅の差は有意ではありません。',
-  'バニラは 3 回、BepInEx のみと現行版は 6 回の中央値です。',
+  'バニラは 3 回、BepInEx のみと現行版は 6 回の中央値です (現行版の 1% low とフレーム時間 p95 は 5 回)。',
   '起動時間はメニューの初期化が始まるまでで、ログインの完了を含みません。ログイン完了までで比べると、現行版 9.9 秒・バニラ 10.0 秒・BepInEx のみ 11.9 秒です。',
-  '1% low の差は、数十秒に 1 回のメモリ回収で 1 フレームが長くなることによるものです。最長のフレームは、現行版がロビーで 19ms 前後・試合中で 21〜26ms、バニラが 18〜19ms、BepInEx のみが 27〜31ms でした。33ms を超えたフレームは、どの条件の採取にもありませんでした。',
+  '1% low の差は、数十秒に 1 回のメモリ回収で 1 フレームが長くなることによるものです。最長のフレームは、現行版がロビーで 19ms 前後・試合中で 21〜22ms、バニラが 18〜19ms、BepInEx のみが 27〜31ms でした。33ms を超えたフレームは、どの条件の採取にもありませんでした。',
 ];
 </script>
 <script id="fill"></script>
