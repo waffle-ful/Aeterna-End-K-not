@@ -57,7 +57,8 @@ public class JackalHadouHo : RoleBase
     private const float GateForwardOffset = 1.5f;
     private const float GateUpOffset = 0.3f;
     private const float GateRadius = 0.5f;
-    private const float BeamBackwardReach = GateForwardOffset + GateRadius;
+    // 根本の判定を撃ち手の足元より少し後ろまで伸ばす (撃ち手と重なって立つ相手が誤差で判定の縁から外れないように)
+    private const float BeamBackwardReach = GateForwardOffset + GateRadius + 0.3f;
 
     // ホストローカル効果音 (WaveCannon 双子)。チャージはクレッシェンド、発射は持続轟音 (素材は FiringDuration 最大より長い)
     private const string NormalChargeSound = "HadouCharge";

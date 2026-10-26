@@ -60,7 +60,8 @@ public class SuperCannonShot
     private const float GateForwardOffset = 1.5f;
     private const float GateUpOffset = 0.3f;
     private const float GateRadius = 0.5f;
-    private const float BeamBackwardReach = GateForwardOffset + GateRadius;
+    // 根本の判定を撃ち手の足元より少し後ろまで伸ばす (撃ち手と重なって立つ相手が誤差で判定の縁から外れないように)
+    private const float BeamBackwardReach = GateForwardOffset + GateRadius + 0.3f;
 
     // ツイン: 2 本のビームラインの縦間隔
     private const float TwinGap = 2.5f;

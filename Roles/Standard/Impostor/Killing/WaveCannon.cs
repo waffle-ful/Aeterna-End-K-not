@@ -41,7 +41,8 @@ public class WaveCannon : RoleBase
     private const float GateUpOffset = 0.3f;      // ゲートの縦位置 (胸の高さ)
     private const float GateRadius = 0.5f;        // ゲート半径 = ビーム発射点までのオフセット (size 140% に対応)
 
-    private const float BeamBackwardReach = GateForwardOffset + GateRadius; // 1.5 unit、根本判定をプレイヤー位置まで伸ばす
+    // 根本の判定を撃ち手の足元より少し後ろまで伸ばす (撃ち手と重なって立つ相手が誤差で判定の縁から外れないように)
+    private const float BeamBackwardReach = GateForwardOffset + GateRadius + 0.3f;
 
     // ホストローカル効果音 (Resources/Sounds/*.wav)。チャージはクレッシェンド、発射は持続轟音 (素材は FiringDuration 最大より長い)
     private const string NormalChargeSound = "HadouCharge";
