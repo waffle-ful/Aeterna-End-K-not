@@ -20,6 +20,7 @@ public static class Zoom
     // 毎フレーム足し込んでおき、tick で使い切る。
     private static float PendingScroll;
     private static int PendingScrollFrame = -1;
+    private static float PendingScrollTime = -1f;
 
     // FixedUpdateCaller.OnLateUpdate (全シーンで毎フレーム) から呼ぶ。
     public static void LatchScroll()
@@ -27,15 +28,18 @@ public static class Zoom
         float y = Il2Direct.MouseScrollDelta.y;
         if (y == 0f) return;
         PendingScroll += y;
-        PendingScrollFrame = Time.frameCount;
+        PendingScrollFrame = Il2Direct.FrameCount;
+        PendingScrollTime = Il2Direct.UnscaledTime;
     }
 
     private static float TakeScroll()
     {
         float y = PendingScroll;
         PendingScroll = 0f;
-        // tick が回っていなかった間 (シーン切り替えなど) のホイールは使わない
-        return Time.frameCount - PendingScrollFrame > 4 ? 0f : y;
+        // tick が回っていなかった間 (シーン切り替えなど) のホイールは使わない。
+        // 高 fps では tick の間に 5 フレーム以上進むので、フレーム数と時刻の両方が古い時だけ捨てる。
+        bool stale = Il2Direct.FrameCount - PendingScrollFrame > 4 && Il2Direct.UnscaledTime - PendingScrollTime > 0.1f;
+        return stale ? 0f : y;
     }
 
     public static void Postfix()
