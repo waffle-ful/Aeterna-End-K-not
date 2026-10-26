@@ -281,6 +281,9 @@ public static class FixedUpdateCaller
     // ModManager.LateUpdate (全シーンで毎フレーム) から呼ぶ。
     public static void OnLateUpdate()
     {
+        try { Zoom.LatchScroll(); }
+        catch (Exception e) { Utils.ThrowException(e); }
+
         if (!DisplayPending || UnityEngine.Time.frameCount == DisplayTickFrame) return;
         RunDisplayTick();
     }
