@@ -89,7 +89,9 @@ public static class AllocProbe
 
     private static void NoteTickWindow(string bucket, long dt)
     {
-        if (bucket.IndexOf('.') < 0) tickWinTicks += dt; // "親.子" は親の内側なので合算しない
+        bool parent = bucket.IndexOf('.') < 0;
+        if (parent) tickWinTicks += dt; // "親.子" は親の内側なので合算しない
+        FrameTrace.NoteMod(bucket, dt, parent);
 
         if (dt > tickWinTopTicks)
         {
