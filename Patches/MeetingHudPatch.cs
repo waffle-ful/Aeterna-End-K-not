@@ -1540,7 +1540,7 @@ internal static class MeetingHudUpdatePatch
         float num5 = Mathf.Max(0f, 5f - num4);
         __instance.UpdateTimerText(StringNames.MeetingProceeds, Mathf.CeilToInt(num5));
 
-        if (AmongUsClient.Instance.AmHost && num5 <= 0f)
+        if (Il2Direct.AmHost(AmongUsClient.Instance) && num5 <= 0f)
         {
             MeetingHudRpcClosePatch.AllowClose = true;
             __instance.state = MeetingHud.MeetingStates.Proceeding;
@@ -1557,17 +1557,19 @@ internal static class MeetingHudUpdatePatch
             MeetingStuckProbe.Update(__instance);
             MeetingSilentProbe.Update(__instance);
 
+            bool amHost = Il2Direct.AmHost(AmongUsClient.Instance);
+
             // EKR logic: 会議中は RoleBase.OnFixedUpdate が止まるため、fiber はここから進める
             // (on_meeting_start の notify [チャット私信] を会議中に届かせる)。
-            if (AmongUsClient.Instance.AmHost) EkrManager.PumpMeetingFibers();
+            if (amHost) EkrManager.PumpMeetingFibers();
 
             // 会議中は OnFixedUpdate が止まるため、Babel の縛り定期通知もここから進める。
-            if (AmongUsClient.Instance.AmHost) Babel.PeriodicNotify();
+            if (amHost) Babel.PeriodicNotify();
 
             // Meeting Skip with vote counting on keystroke (F6)
-            if (AmongUsClient.Instance.AmHost && Input.GetKeyDown(KeyCode.F6)) __instance.CheckForEndVoting();
+            if (amHost && Il2Direct.GetKeyDown(KeyCode.F6)) __instance.CheckForEndVoting();
 
-            if (AmongUsClient.Instance.AmHost && Input.GetMouseButtonUp(1) && Input.GetKey(KeyCode.LeftControl))
+            if (amHost && Il2Direct.GetMouseButtonUp(1) && Il2Direct.GetKey(KeyCode.LeftControl))
             {
                 __instance.playerStates.DoIf(x => x.HighlightedFX.enabled, x =>
                 {

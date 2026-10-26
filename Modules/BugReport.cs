@@ -158,8 +158,8 @@ public static class BugReport
             EnsureHudButton(hud);
             if (Il2Direct.Alive(_hudButton))
             {
-                if (_hudButton.activeSelf != show) _hudButton.SetActive(show);
-                if (show && (Time.frameCount & 7) == 0) PlaceHudButton(hud);
+                if (Il2Direct.ActiveSelf(_hudButton) != show) _hudButton.SetActive(show);
+                if (show && (Il2Direct.FrameCount & 7) == 0) PlaceHudButton(hud);
             }
 
             if (IsOpen) Pump();

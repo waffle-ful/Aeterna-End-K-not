@@ -346,7 +346,7 @@ public static partial class BackroomsLobby
     // これで vision/streaming が no-clip ON/OFF に関係なく player 実位置で動く。
     private static Vector2 LocalPlayerFeet()
     {
-        Vector3 t = PlayerControl.LocalPlayer.transform.position;
+        Vector3 t = Il2Direct.Position(PlayerControl.LocalPlayer.transform);
         return new Vector2(t.x, t.y - 0.3636f);
     }
 
@@ -2168,7 +2168,7 @@ public static partial class BackroomsLobby
         int r = ActiveChunkRadius;
         Camera cam = Camera.main;
         if (Il2Direct.Alive(cam))
-            r = Math.Min(Math.Max(r, (int)Math.Ceiling((cam.orthographicSize * cam.aspect + 4f) / ChunkSize)), 6);
+            r = Math.Min(Math.Max(r, (int)Math.Ceiling((Il2Direct.OrthographicSize(cam) * cam.aspect + 4f) / ChunkSize)), 6);
 
         // ズーム変化 (= r 変化) でも再評価が走るよう、chunk 一致だけでなく r も比較する
         if (!force && _streamValid && playerCx == _streamCx && playerCy == _streamCy && r == _lastStreamRadius) return;
@@ -3789,7 +3789,7 @@ public static partial class BackroomsLobby
     public static void UpdateCulling()
     {
         if (!_inBackrooms) return;
-        if (PlayerControl.LocalPlayer == null) return;
+        if (!Il2Direct.Alive(PlayerControl.LocalPlayer)) return;
         if (SpawnedTiles.Count == 0) return;
 
         // 「全部見せる」(距離 cull せず全タイル active) モードの判定:
@@ -3809,7 +3809,7 @@ public static partial class BackroomsLobby
             for (int i = 0; i < SpawnedTiles.Count; i++)
             {
                 GameObject go = SpawnedTiles[i];
-                if (go != null && !go.activeSelf) { go.SetActive(true); anyInactive = true; }
+                if (Il2Direct.Alive(go) && !go.activeSelf) { go.SetActive(true); anyInactive = true; }
             }
             // load-all は drain 完了で安定 (以後スキップ)。手動 paused はストリーミングで毎回変わるので毎フレ走査。
             if (!anyInactive && _customMapLoadAllMode) _customMapAllActive = true;
@@ -3841,7 +3841,7 @@ public static partial class BackroomsLobby
         for (int i = 0; i < n; i++)
         {
             GameObject go = SpawnedTiles[i];
-            if (go == null) continue;
+            if (!Il2Direct.Alive(go)) continue;
             Vector2 pos = SpawnedTilePositions[i];
             float ex = pos.x - px;
             float ey = pos.y - py;
@@ -3982,13 +3982,13 @@ public static partial class BackroomsLobby
             // UICamera は触らない (HUD サイズ据置)。ShadowQuad は ortho≈3 のみ表示 (Zoom.cs L119/142 と同じ規約)
             cam.orthographicSize = _zoomOverride;
             if (HudManager.InstanceExists && Il2Direct.Alive(PlayerControl.LocalPlayer))
-                HudManager.Instance.ShadowQuad?.gameObject.SetActive(Mathf.Approximately(cam.orthographicSize, 3f) && PlayerControl.LocalPlayer.IsAlive());
+                HudManager.Instance.ShadowQuad?.gameObject.SetActive(Mathf.Approximately(Il2Direct.OrthographicSize(cam), 3f) && PlayerControl.LocalPlayer.IsAlive());
         }
 
         if (!_inBackrooms) return;
 
         // 適応 cull: 実効表示半径 = max(基準値, カメラ視界半幅+4u)。1u 超の変化時のみ sweep を invalidate (churn 防止)
-        float halfW = cam.orthographicSize * cam.aspect;
+        float halfW = Il2Direct.OrthographicSize(cam) * cam.aspect;
         float wantCull = Math.Max(_cullBase, halfW + 4f);
         if (Math.Abs(wantCull - CullRadius) > 1f)
         {
@@ -4021,7 +4021,7 @@ public static partial class BackroomsLobby
             PlayerControl glp = PlayerControl.LocalPlayer;
             if (Il2Direct.Alive(glp))
             {
-                Vector3 gp = glp.transform.position;
+                Vector3 gp = Il2Direct.Position(glp.transform);
                 BackroomsCasters.UpdateGating(gp.x, gp.y);
             }
             BackroomsShadow.Drive();
@@ -4182,13 +4182,13 @@ public static partial class BackroomsLobby
 
     public static void UpdateVision()
     {
-        if (!_inBackrooms || _visionGO == null || _visionMesh == null) return;
+        if (!_inBackrooms || !Il2Direct.Alive(_visionGO) || !Il2Direct.Alive(_visionMesh)) return;
 
         // overlay の flicker は idle skip と独立に毎フレ駆動 (player 静止中もチカチカ続く)
         UpdateOverlay();
 
         if (_visionPaused) return;
-        if (PlayerControl.LocalPlayer == null) return;
+        if (!Il2Direct.Alive(PlayerControl.LocalPlayer)) return;
 
         // 足元位置で vision 展開。GetTruePosition() ではなく LocalPlayerFeet() を使う:
         // no-clip ON 時に Collider.offset が (0, 127) に書換わって GetTruePosition() が
@@ -4211,7 +4211,7 @@ public static partial class BackroomsLobby
         EnsureCosTable();
 
         _visionGO.transform.position = new Vector3(player.x, player.y, 0f);
-        if (_upperVisionGO != null) _upperVisionGO.transform.position = _visionGO.transform.position;
+        if (Il2Direct.Alive(_upperVisionGO)) _upperVisionGO.transform.position = _visionGO.transform.position;
 
         // WallAabbs が cull/stream で変わっていたら raycast 用の併合済みリストを作り直す
         // (per-frame ではなく dirty 時のみ — O(N log N) on ~250 box を ~2/秒)
@@ -4259,7 +4259,7 @@ public static partial class BackroomsLobby
         //     → 視界内の壁上面が Upper dark に覆われない (= 黒い縦線 / top band 消失の症状解消)。
         //     許容 trade-off: 壁角の外側に thin 三角形 leak (corner leak) が出るが、Backrooms
         //     ロビーで cosmetic 上問題なし (壁が連続するため leak の角度範囲が極小)
-        if (_upperVisionMesh != null)
+        if (Il2Direct.Alive(_upperVisionMesh))
             BuildDonutMesh(rfc, _upperVertsBuf, _upperTrisBuf, _upperColorsBuf, _upperVisionMesh);
 
         // 3. Corner rays — 各 visible AABB corner に ±ε rays で sharp shadow boundary を作る (Lower mesh 専用)
@@ -4320,7 +4320,7 @@ public static partial class BackroomsLobby
         for (int wi = 0; wi < wallCount; wi++)
         {
             SpriteRenderer ghost = wi < WallGhostRenderers.Count ? WallGhostRenderers[wi] : null;
-            if (ghost == null) continue;
+            if (!Il2Direct.Alive(ghost)) continue;
 
             var w = WallAabbs[wi];
             float dx = w.cx - player.x;

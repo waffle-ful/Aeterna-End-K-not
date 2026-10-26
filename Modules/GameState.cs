@@ -678,7 +678,7 @@ public static class GameStates
 
     /**********TOP ZOOM.cs***********/
     public static bool IsShip => ShipStatus.Instance;
-    public static bool IsCanMove => PlayerControl.LocalPlayer && PlayerControl.LocalPlayer.CanMove;
+    public static bool IsCanMove => Il2Direct.Alive(PlayerControl.LocalPlayer) && PlayerControl.LocalPlayer.CanMove;
     public static bool IsDead => PlayerControl.LocalPlayer && !PlayerControl.LocalPlayer.IsAlive();
 }
 

@@ -34,7 +34,7 @@ public static class MeetingSilentProbe
 
     public static void Update(MeetingHud meetingHud)
     {
-        if (!AmongUsClient.Instance.AmHost || meetingHud == null || _current == meetingHud) return;
+        if (!Il2Direct.AmHost(AmongUsClient.Instance) || !Il2Direct.Alive(meetingHud) || (_current is not null && _current.Pointer == meetingHud.Pointer)) return;
 
         _current = meetingHud;
         Voted.Clear();

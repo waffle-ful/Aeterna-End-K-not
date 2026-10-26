@@ -65,7 +65,7 @@ public static class FixedUpdateCaller
             if (!DeferDisplay) RunDisplayTick();
 
             // 本編が毎フレーム書き戻すボタンの性質だけは、表示系を後回しにしていても従来どおりここで書く
-            if (DeferDisplay && HudManager.InstanceExists) HudManagerPatch.ButtonLane(HudManager.Instance);
+            if (DeferDisplay && Il2Direct.Exists<HudManager>()) HudManagerPatch.ButtonLane(HudManager.Instance);
 
             alloc = AllocProbe.Mark("hudlane", alloc);
 
@@ -84,9 +84,9 @@ public static class FixedUpdateCaller
             {
                 PlayerControl lp = PlayerControl.LocalPlayer; // 1 tick 内で 1 回だけ wrapper を取る
 
-                if (HudManager.InstanceExists && GameStates.IsInTask && !Il2Direct.Alive(ExileController.Instance) && !AntiBlackout.SkipTasks && lp.CanUseKillButton())
+                if (Il2Direct.Exists<HudManager>() && GameStates.IsInTask && !Il2Direct.Alive(ExileController.Instance) && !AntiBlackout.SkipTasks && lp.CanUseKillButton())
                 {
-                    Predicate<PlayerControl> predicate = amongUsClient.AmHost
+                    Predicate<PlayerControl> predicate = Il2Direct.AmHost(amongUsClient)
                         ? Options.CurrentGameMode switch
                         {
                             CustomGameMode.BedWars => BedWars.IsNotInLocalPlayersTeam,
@@ -127,7 +127,7 @@ public static class FixedUpdateCaller
 
             try
             {
-                if (amongUsClient.AmHost && GameStates.InGame && !GameStates.IsEnded)
+                if (Il2Direct.AmHost(amongUsClient) && GameStates.InGame && !GameStates.IsEnded)
                     FixedUpdatePatch.LoversSuicide();
             }
             catch (Exception e) { Utils.ThrowException(e); }
@@ -136,7 +136,7 @@ public static class FixedUpdateCaller
             alloc = AllocProbe.Mark("kill", killStart);
 
             bool lobby = GameStates.IsLobby;
-            FixedUpdatePatch.AmHostTick = amongUsClient.AmHost; // 個別 tick 経路の getter 呼びを 1 回に畳む (FixedUpdatePatch.AmHostTick 参照)
+            FixedUpdatePatch.AmHostTick = Il2Direct.AmHost(amongUsClient); // 個別 tick 経路の getter 呼びを 1 回に畳む (FixedUpdatePatch.AmHostTick 参照)
 
             if (lobby || (Main.IntroDestroyed && GameStates.InGame && !GameStates.IsMeeting && !Il2Direct.Alive(ExileController.Instance) && !AntiBlackout.SkipTasks))
             {
@@ -244,7 +244,7 @@ public static class FixedUpdateCaller
 
                 try
                 {
-                    if (amongUsClient.AmHost && Main.GameTimer.IsRunning && Options.EnableGameTimeLimit.GetBool() && Main.GameTimer.Elapsed.TotalSeconds > Options.GameTimeLimit.GetInt() && Options.CurrentGameMode is CustomGameMode.Standard or CustomGameMode.NaturalDisasters)
+                    if (Il2Direct.AmHost(amongUsClient) && Main.GameTimer.IsRunning && Options.EnableGameTimeLimit.GetBool() && Main.GameTimer.Elapsed.TotalSeconds > Options.GameTimeLimit.GetInt() && Options.CurrentGameMode is CustomGameMode.Standard or CustomGameMode.NaturalDisasters)
                     {
                         Main.GameTimer.Reset();
                         Main.GameEndDueToTimer = true;
@@ -276,7 +276,7 @@ public static class FixedUpdateCaller
     private static int DisplayTickFrame = -1;
 
     // 表示系の 1 tick の長さ。LateUpdate から回るので Time.deltaTime は描画フレームの長さになり、tick の長さと合わない。
-    public static float DisplayTickDelta => UnityEngine.Time.fixedDeltaTime;
+    public static float DisplayTickDelta => Il2Direct.FixedDeltaTime;
 
     // ModManager.LateUpdate (全シーンで毎フレーム) から呼ぶ。
     public static void OnLateUpdate()
@@ -284,7 +284,7 @@ public static class FixedUpdateCaller
         try { Zoom.LatchScroll(); }
         catch (Exception e) { Utils.ThrowException(e); }
 
-        if (!DisplayPending || UnityEngine.Time.frameCount == DisplayTickFrame) return;
+        if (!DisplayPending || Il2Direct.FrameCount == DisplayTickFrame) return;
         RunDisplayTick();
     }
 
@@ -395,7 +395,7 @@ public static class FixedUpdateCaller
             alloc = AllocProbe.Mark("hudspr", alloc);
 
             // YouTube chat polling は HUD の有無と無関係に進める（ロビーから動かす前提）
-            try { YouTubeChatManager.Tick(UnityEngine.Time.fixedDeltaTime); }
+            try { YouTubeChatManager.Tick(Il2Direct.FixedDeltaTime); }
             catch (Exception e)
             {
                 if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
@@ -403,7 +403,7 @@ public static class FixedUpdateCaller
             }
 
             // YouTube ライブチャットへの自動投稿 (ホストローカル・HTTPのみ、RPCなし)
-            try { YouTubeChatPoster.Tick(UnityEngine.Time.fixedDeltaTime); }
+            try { YouTubeChatPoster.Tick(Il2Direct.FixedDeltaTime); }
             catch (Exception e)
             {
                 if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }

@@ -2,6 +2,7 @@
 using HarmonyLib;
 using System;
 using System.Linq;
+using EndKnot.Modules;
 
 namespace EndKnot;
 
@@ -76,7 +77,7 @@ internal static class AllMapIconsPatch
         // Skip entirely when MapImage isn't wired up — the freeplay-scene GameStartManager
         // calls UpdateMapImage every frame and vanilla itself NREs internally on the null
         // MapImage; suppressing both paths stops the spam.
-        if (__instance == null || __instance.MapImage == null) return false;
+        if (!Il2Direct.Alive(__instance) || !Il2Direct.Alive(__instance.MapImage)) return false;
 
         if (GameOptionsMapPickerPatch.SetDleks)
         {

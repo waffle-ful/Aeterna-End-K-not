@@ -2,6 +2,7 @@
 using EndKnot.Roles;
 using HarmonyLib;
 using UnityEngine;
+using EndKnot.Modules;
 
 namespace EndKnot;
 
@@ -22,7 +23,7 @@ internal static class CanUsePatch
 
         if (__instance.AllowImpostor) return true;
 
-        int frame = Time.frameCount;
+        int frame = Il2Direct.FrameCount;
         if (frame == _gateFrame) return _gateValue;
 
         PlayerControl lp = PlayerControl.LocalPlayer;

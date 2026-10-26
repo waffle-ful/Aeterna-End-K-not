@@ -20,7 +20,7 @@ public static class VentPositionCache
     public static Vent Closest(Vector2 from)
     {
         ShipStatus ship = ShipStatus.Instance;
-        if (!ship) return null;
+        if (!Il2Direct.Alive(ship)) return null;
 
         Il2CppReferenceArray<Vent> all = ship.AllVents;
         if (all == null || all.Length == 0) return null;

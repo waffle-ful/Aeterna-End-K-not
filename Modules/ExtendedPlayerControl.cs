@@ -176,7 +176,7 @@ internal static class ExtendedPlayerControl
             // 安い側の条件を先に (Is() は interop の null 判定 1 本を伴う)
             if (MeetingStates.FirstMeeting && player.Is(CustomRoles.Trainee)) return false;
             if (closestVentId != ventId && player.Is(CustomRoles.Blocked)) return false;
-            if (!GameStates.IsInTask || ExileController.Instance || AntiBlackout.SkipTasks || Main.Invisible.Contains(player.PlayerId)) return false;
+            if (!GameStates.IsInTask || Il2Direct.Alive(ExileController.Instance) || AntiBlackout.SkipTasks || Main.Invisible.Contains(player.PlayerId)) return false;
             if ((impostorVentButton ?? player.CanUseImpostorVentButton()) || player.GetRoleTypes() == RoleTypes.Engineer)
             {
                 foreach (var state in Main.PlayerStates.Values)
@@ -1748,9 +1748,9 @@ internal static class ExtendedPlayerControl
 
         public Vector2 Pos()
         {
-            if (player.AmOwner)
+            if (Il2Direct.AmOwner(player))
             {
-                Vector3 ownPos = player.transform.position;
+                Vector3 ownPos = Il2Direct.Position(player.transform);
                 return new Vector2(ownPos.x, ownPos.y);
             }
 
@@ -1772,7 +1772,7 @@ internal static class ExtendedPlayerControl
             }
             catch (Exception e) { ThrowException(e); }
 
-            Vector3 fallbackPos = player.transform.position;
+            Vector3 fallbackPos = Il2Direct.Position(player.transform);
             return new Vector2(fallbackPos.x, fallbackPos.y);
         }
 
@@ -2566,7 +2566,7 @@ internal static class ExtendedPlayerControl
 
         public bool UsesPetInsteadOfKill()
         {
-            return player && !player.Is(CustomRoles.Bloodlust) && player.GetCustomRole().UsesPetInsteadOfKill();
+            return Il2Direct.Alive(player) && !player.Is(CustomRoles.Bloodlust) && player.GetCustomRole().UsesPetInsteadOfKill();
         }
 
         public bool IsModdedClient()

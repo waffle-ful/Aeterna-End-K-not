@@ -3134,20 +3134,20 @@ public static class FixDarkThemeForSearchBar
 {
     public static void Postfix()
     {
-        if (!GameSettingMenu.Instance) return;
+        if (!Il2Direct.Alive(GameSettingMenu.Instance)) return;
 
         MenuPerfProbe.Pump();
 
         FreeChatInputField field = GameSettingMenuPatch.InputField;
 
-        if (!field || !field.gameObject.activeSelf) return;
+        if (!Il2Direct.Alive(field) || !field.gameObject.activeSelf) return;
 
         OptionSearchSuggestPatch.Pump();
 
-        if (field.background) field.background.color = new Color32(40, 40, 40, byte.MaxValue);
+        if (Il2Direct.Alive(field.background)) field.background.color = new Color32(40, 40, 40, byte.MaxValue);
 
         // outputText を欠いた clone もキャッシュされうる (FixInputChatField 側のコメント参照)。ここは
         // ChatController.Update ごとに走るので、無ガードだと毎フレーム NRE になる。
-        if (field.textArea && field.textArea.outputText) field.textArea.outputText.color = Color.white;
+        if (Il2Direct.Alive(field.textArea) && Il2Direct.Alive(field.textArea.outputText)) field.textArea.outputText.color = Color.white;
     }
 }

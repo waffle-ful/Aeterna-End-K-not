@@ -63,7 +63,10 @@ public static unsafe class InvokeCensus
     public static bool Running => _armed;
 
     /// <summary>seconds 秒間数えて、結果の各行を report へ渡す。</summary>
-    public static string Start(float seconds, Action<string> report)
+    // filter を渡すと、呼び出し元の行のうちそれを含むものを上位 40 件に限らず全部出す (例 "[box]" で箱詰めの全呼び出し元)
+    private static string _filter;
+
+    public static string Start(float seconds, Action<string> report, string filter = null)
     {
         if (_armed) return "ERR invcensus already running";
 
@@ -107,6 +110,7 @@ public static unsafe class InvokeCensus
         _overflow = 0;
         _offThread = 0;
         _mainThread = Environment.CurrentManagedThreadId;
+        _filter = string.IsNullOrWhiteSpace(filter) ? null : filter;
 
         long il0 = GcPrepass.BoehmUsedBytes();
         int gc0 = GcPrepass.BoehmCollectionCount();
@@ -381,6 +385,12 @@ public static unsafe class InvokeCensus
 
         foreach (KeyValuePair<string, int> kv in Sites.OrderByDescending(k => k.Value).Take(40))
             report($"  S {kv.Value * (SampleMask + 1) / sec,7:F0}/s {kv.Key}");
+
+        if (_filter != null)
+        {
+            foreach (KeyValuePair<string, int> kv in Sites.Where(k => k.Key.Contains(_filter, StringComparison.Ordinal)).OrderByDescending(k => k.Value).Take(200))
+                report($"  F {kv.Value * (SampleMask + 1) / sec,7:F0}/s {kv.Key}");
+        }
 
         // 箱詰めのある呼び出し元だけを、呼び出し元の関数ごとに合算して並べる (il2cpp 側のゴミの持ち主)
         var boxOwners = new Dictionary<string, int>();

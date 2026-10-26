@@ -562,7 +562,7 @@ public static class TextBoxPatch
         }
 
         if (!__instance.Pipe || !__instance.hasFocus) return false;
-        __instance.pipeBlinkTimer += Time.deltaTime * 2f;
+        __instance.pipeBlinkTimer += Modules.Il2Direct.DeltaTime * 2f;
         __instance.Pipe.enabled = (int)__instance.pipeBlinkTimer % 2 == 0;
 
         return false;

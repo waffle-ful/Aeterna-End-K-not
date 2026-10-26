@@ -318,8 +318,8 @@ public static class GameStartManagerPatch
 
             // どちらもゲーム側の bool 読みで 1 回ごとに箱が出るので、このフレームの値を 1 回だけ読む
             AmongUsClient client = AmongUsClient.Instance;
-            bool amHost = client.AmHost;
-            bool isPublic = client.IsGamePublic;
+            bool amHost = Il2Direct.AmHost(client);
+            bool isPublic = Il2Direct.IsGamePublic(client);
 
             try { instance.UpdateMapImage((MapNames)GameManager.Instance.LogicOptions.MapId); }
             catch (Exception e)
@@ -372,7 +372,7 @@ public static class GameStartManagerPatch
 
                 if (DiscordManager.InstanceExists)
                 {
-                    if (AmongUsClient.Instance.AmHost && AmongUsClient.Instance.NetworkMode == NetworkModes.OnlineGame)
+                    if (amHost && AmongUsClient.Instance.NetworkMode == NetworkModes.OnlineGame)
                         DiscordManager.Instance.SetInLobbyHost(instance.LastPlayerCount, GameManager.Instance.LogicOptions.MaxPlayers, AmongUsClient.Instance.GameId);
                     else
                         DiscordManager.Instance.SetInLobbyClient(instance.LastPlayerCount, GameManager.Instance.LogicOptions.MaxPlayers, AmongUsClient.Instance.GameId);
@@ -440,16 +440,16 @@ public static class GameStartManagerPatch
         {
             try
             {
-                if (!Il2Direct.Alive(AmongUsClient.Instance) || AmongUsClient.Instance.IsGameStarted || GameStates.IsInGame || !Il2Direct.Alive(__instance) || __instance.startState == GameStartManager.StartingStates.Starting) return;
+                if (!Il2Direct.Alive(AmongUsClient.Instance) || Il2Direct.IsGameStarted(AmongUsClient.Instance) || GameStates.IsInGame || !Il2Direct.Alive(__instance) || __instance.startState == GameStartManager.StartingStates.Starting) return;
 
                 // ゲーム側の float 読みは 1 回ごとに箱が出るので、このフレームの時刻を 1 回だけ読む
-                float now = Time.unscaledTime;
+                float now = Il2Direct.UnscaledTime;
                 var canStartGame = true;
                 var mismatchedClientName = string.Empty;
 
                 var warningMessage = "";
 
-                if (AmongUsClient.Instance.AmHost)
+                if (Il2Direct.AmHost(AmongUsClient.Instance))
                 {
                     // 照合結果は 0.25s ごとの再スキャンで十分 — 旧実装は毎フレーム ToArray (managed 配列
                     // + 全要素 proxy 解決) + クライアント数ぶんの GetComponent で、ロビー常駐のアロケ源だった。
@@ -560,7 +560,7 @@ public static class GameStartManagerPatch
                 tmp.gameObject.SetActive(true);
 
                 // Lobby timer
-                if (Il2Direct.Alive(GameData.Instance) && HudManager.InstanceExists && AmongUsClient.Instance.NetworkMode != NetworkModes.LocalGame && GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
+                if (Il2Direct.Alive(GameData.Instance) && Il2Direct.Exists<HudManager>() && AmongUsClient.Instance.NetworkMode != NetworkModes.LocalGame && GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
                 {
                     float timer = Timer;
 
@@ -573,7 +573,7 @@ public static class GameStartManagerPatch
 
                     LobbyTimerBg.color = GetTimerColor(timer);
 
-                    if (timer <= 60 && !Warned && AmongUsClient.Instance.AmHost)
+                    if (timer <= 60 && !Warned && Il2Direct.AmHost(AmongUsClient.Instance))
                     {
                         Warned = true;
                         LobbyTimerExtensionUI lobbyTimerExtensionUI = HudManager.Instance.LobbyTimerExtensionUI;

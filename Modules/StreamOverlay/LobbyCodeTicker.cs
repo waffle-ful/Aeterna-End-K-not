@@ -50,9 +50,9 @@ public class LobbyCodeTicker : MonoBehaviour
 
     private static bool ShouldShow()
     {
-        if (!HudManager.InstanceExists) return false;
+        if (!Il2Direct.Exists<HudManager>()) return false;
         AmongUsClient client = AmongUsClient.Instance;
-        if (!Il2Direct.Alive(client) || !client.AmHost) return false;
+        if (!Il2Direct.Alive(client) || !Il2Direct.AmHost(client)) return false;
         if (LobbyCodeBubbleOptions.TickerEnabled == null || !LobbyCodeBubbleOptions.TickerEnabled.GetBool()) return false;
         return GameStates.IsLobby;
     }

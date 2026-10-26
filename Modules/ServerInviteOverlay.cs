@@ -126,8 +126,8 @@ public static class ServerInviteOverlay
     {
         _isOpen = false;
         _slideT = 0f;
-        if (_panelRoot != null && _panelRoot.activeSelf) _panelRoot.SetActive(false);
-        if (_toggle?.Button != null && _toggle.Button.gameObject.activeSelf) _toggle.Button.gameObject.SetActive(false);
+        if (Il2Direct.Alive(_panelRoot) && _panelRoot.activeSelf) _panelRoot.SetActive(false);
+        if (Il2Direct.Alive(_toggle?.Button) && _toggle.Button.gameObject.activeSelf) _toggle.Button.gameObject.SetActive(false);
     }
 
     public static void Destroy()
@@ -343,7 +343,7 @@ internal static class ServerInviteOverlayTickHook
 {
     public static void Postfix()
     {
-        if (!AmongUsClient.Instance.AmHost) return;
+        if (!Il2Direct.AmHost(AmongUsClient.Instance)) return;
         ServerInviteOverlay.Tick();
     }
 }

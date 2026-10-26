@@ -23,9 +23,9 @@ public static class MeetingStuckProbe
 
     public static void Update(MeetingHud meetingHud)
     {
-        if (!AmongUsClient.Instance.AmHost || meetingHud == null) return;
+        if (!Il2Direct.AmHost(AmongUsClient.Instance) || !Il2Direct.Alive(meetingHud)) return;
 
-        if (_current != meetingHud)
+        if (_current is null || _current.Pointer != meetingHud.Pointer)
         {
             _current = meetingHud;
             _nextSampleTime = Time.time + SampleInterval;
@@ -35,7 +35,7 @@ public static class MeetingStuckProbe
         }
 
         if (meetingHud.state is MeetingHud.MeetingStates.Animating or MeetingHud.MeetingStates.Results or MeetingHud.MeetingStates.Proceeding) return;
-        if (Time.time < _nextSampleTime) return;
+        if (Il2Direct.GameTime < _nextSampleTime) return;
 
         _nextSampleTime = Time.time + SampleInterval;
 

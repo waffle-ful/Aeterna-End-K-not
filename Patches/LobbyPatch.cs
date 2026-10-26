@@ -83,7 +83,7 @@ public static class HostInfoPanelSetUpPatch
         if (!GameStates.IsLobby || __instance.player.ColorId == byte.MaxValue) return false;
 
         IntPtr panel = __instance.Pointer;
-        float now = Time.unscaledTime;
+        float now = Il2Direct.UnscaledTime;
         if (panel == SetUpPanel && now < NextSetUpTime) return false;
 
         SetUpPanel = panel;
@@ -98,7 +98,7 @@ public static class HostInfoPanelSetUpPatch
             if (!Il2Direct.Alive(HostText)) HostText = __instance.content.transform.FindChild("Name").GetComponent<TextMeshPro>();
 
             int colorId = __instance.player.ColorId;
-            float now = Time.unscaledTime;
+            float now = Il2Direct.UnscaledTime;
 
             IntPtr panel = __instance.Pointer;
 

@@ -157,8 +157,8 @@ public class AudienceSeats : MonoBehaviour
 
     private static bool ShouldShow()
     {
-        if (!HudManager.InstanceExists) return false;
-        if (!Il2Direct.Alive(AmongUsClient.Instance) || !AmongUsClient.Instance.AmHost) return false;
+        if (!Il2Direct.Exists<HudManager>()) return false;
+        if (!Il2Direct.Alive(AmongUsClient.Instance) || !Il2Direct.AmHost(AmongUsClient.Instance)) return false;
         if (YouTubeChatOptions.Enabled == null || !YouTubeChatOptions.Enabled.GetBool()) return false;
         if (YouTubeChatOptions.SeatsEnabled == null || !YouTubeChatOptions.SeatsEnabled.GetBool()) return false;
         if (YouTubeChatOptions.HideDuringMeetings != null && YouTubeChatOptions.HideDuringMeetings.GetBool() && GameStates.IsMeeting) return false;
@@ -170,7 +170,7 @@ public class AudienceSeats : MonoBehaviour
         try
         {
             EnsureSubscribed();
-            float now = Time.realtimeSinceStartup;
+            float now = Il2Direct.RealtimeSinceStartup;
             bool show = ShouldShow();
 
             while (Incoming.TryDequeue(out (string Author, string Text) m))
@@ -439,7 +439,7 @@ public class AudienceSeats : MonoBehaviour
     private float CameraZoom()
     {
         if (!Il2Direct.Alive(_cam) || _halfH <= 0f) return 1f;
-        float zoom = _cam.orthographicSize / _halfH;
+        float zoom = Il2Direct.OrthographicSize(_cam) / _halfH;
         return zoom > 0f ? zoom : 1f;
     }
 
@@ -459,13 +459,13 @@ public class AudienceSeats : MonoBehaviour
 
         if (!show || !_posInitialized)
         {
-            if (_rootAlive && _root.activeSelf) _root.SetActive(false);
+            if (_rootAlive && Il2Direct.ActiveSelf(_root)) _root.SetActive(false);
             return;
         }
 
         float s = Scale;
         if (!_rootAlive && !BuildStand(s)) return;
-        if (!_root.activeSelf) _root.SetActive(true);
+        if (!Il2Direct.ActiveSelf(_root)) _root.SetActive(true);
 
         // 大きさが変わったら台を作り直す
         if (FxMath.Abs(_builtWorldScale - s) > _builtWorldScale * 0.02f && now >= _nextRebuild)
@@ -768,9 +768,9 @@ public class AudienceSeats : MonoBehaviour
             _pos = FxMath.V2(FxMath.Clamp(_pos.x, 0f, FxMath.Max(0f, screenW - bw)), FxMath.Clamp(_pos.y, FxMath.Min(200f * s, screenH), screenH));
 
             HandleDrag(s);
-            if (Event.current.type != EventType.Repaint) return;
+            if (Il2Direct.EventTypeOf(Event.current) != EventType.Repaint) return;
 
-            DrawBubbles(s, Time.realtimeSinceStartup);
+            DrawBubbles(s, Il2Direct.RealtimeSinceStartup);
         }
         catch (Exception e) { Utils.ThrowException(e); }
     }
@@ -784,7 +784,7 @@ public class AudienceSeats : MonoBehaviour
         Rect stand = new(_pos.x, _pos.y - (RowLift + 20f) * s, w, (RowLift + 50f) * s);
         Rect sign = SignRect(s);
 
-        switch (e.type)
+        switch (Il2Direct.EventTypeOf(e))
         {
             case EventType.MouseDown when stand.Contains(e.mousePosition) || sign.Contains(e.mousePosition):
                 _dragging = true;
@@ -826,7 +826,7 @@ public class AudienceSeats : MonoBehaviour
         width = seats.BenchWidth(s);
         benchLeft = seats._pos.x;
         benchRight = seats._pos.x + width;
-        bottom = seats.SignRect(s).yMax;
+        bottom = Il2Direct.YMax(seats.SignRect(s));
         return true;
     }
 

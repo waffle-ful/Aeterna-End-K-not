@@ -307,7 +307,7 @@ public class ClientControlGUI : MonoBehaviour
     // Called from ImguiHost's OnGUI once per IMGUI event (Repaint every frame, plus input events)
     private void DrawGui()
     {
-        if (!HudManager.InstanceExists || Modules.CleanShot.On) return;
+        if (!Il2Direct.Exists<HudManager>() || Modules.CleanShot.On) return;
 
         if (!_windowInitialized) InitWindowRect();
 
@@ -348,12 +348,12 @@ public class ClientControlGUI : MonoBehaviour
     // ModManager.LateUpdate (every frame, every scene)
     internal void TickToggle()
     {
-        bool show = !IsOpen && HudManager.InstanceExists && !Modules.CleanShot.On;
+        bool show = !IsOpen && Il2Direct.Exists<HudManager>() && !Modules.CleanShot.On;
 
         if (!show)
         {
             _pressedInside = false;
-            if (Il2Direct.Alive(_toggleGo) && _toggleGo.activeSelf) _toggleGo.SetActive(false);
+            if (Il2Direct.Alive(_toggleGo) && Il2Direct.ActiveSelf(_toggleGo)) _toggleGo.SetActive(false);
             return;
         }
 
@@ -363,11 +363,11 @@ public class ClientControlGUI : MonoBehaviour
         if (!PlaceToggle())
         {
             _pressedInside = false;
-            if (_toggleGo.activeSelf) _toggleGo.SetActive(false);
+            if (Il2Direct.ActiveSelf(_toggleGo)) _toggleGo.SetActive(false);
             return;
         }
 
-        if (!_toggleGo.activeSelf) _toggleGo.SetActive(true);
+        if (!Il2Direct.ActiveSelf(_toggleGo)) _toggleGo.SetActive(true);
 
         // 90% transparent during gameplay or while the settings menu is open, same as the IMGUI button was
         float alpha = GameStates.IsInGame || Il2Direct.Alive(GameSettingMenu.Instance) ? 0.10f : 1f;
@@ -378,11 +378,11 @@ public class ClientControlGUI : MonoBehaviour
             _toggleSr.color = new Color(1f, 1f, 1f, alpha);
         }
 
-        Vector3 mouse = Input.mousePosition;
-        bool inside = _toggleRect.Contains(new Vector2(mouse.x, mouse.y));
-        if (Input.GetMouseButtonDown(0)) _pressedInside = inside;
+        Vector3 mouse = Il2Direct.MousePosition;
+        bool inside = Il2Direct.Contains(_toggleRect, new Vector2(mouse.x, mouse.y));
+        if (Il2Direct.GetMouseButtonDown(0)) _pressedInside = inside;
 
-        Sprite sprite = !inside ? _spNormal : _pressedInside && Input.GetMouseButton(0) ? _spActive : _spHover;
+        Sprite sprite = !inside ? _spNormal : _pressedInside && Il2Direct.GetMouseButton(0) ? _spActive : _spHover;
 
         if (!ReferenceEquals(sprite, _spShown))
         {
@@ -391,7 +391,7 @@ public class ClientControlGUI : MonoBehaviour
         }
 
         // A click is a press and a release both on the button, like GUI.Button
-        if (Input.GetMouseButtonUp(0))
+        if (Il2Direct.GetMouseButtonUp(0))
         {
             bool clicked = inside && _pressedInside;
             _pressedInside = false;
@@ -438,7 +438,7 @@ public class ClientControlGUI : MonoBehaviour
         if (!Il2Direct.Alive(cam)) return false;
 
         int sw = Il2Direct.ScreenWidth, sh = Il2Direct.ScreenHeight;
-        float ortho = cam.orthographicSize;
+        float ortho = Il2Direct.OrthographicSize(cam);
         if (sw == _placedW && sh == _placedH && ortho == _placedOrtho) return true;
         _placedW = sw;
         _placedH = sh;
