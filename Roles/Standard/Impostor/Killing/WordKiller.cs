@@ -28,6 +28,7 @@ public class WordKiller : RoleBase
 
     private static OptionItem KillCooldown;
     private static OptionItem AbilityUseLimit;
+    // キルでの回数増は Utils.IncreaseAbilityUseLimitOnKill がこのオプション名で拾う (役職側で足すと二重になる)
     private static OptionItem AbilityUseGainWithEachKill;
     private static OptionItem CanKillImpostors;
     private static OptionItem MinWordLength;
@@ -189,12 +190,6 @@ public class WordKiller : RoleBase
             // 誰が死んだかだけ伝え、ワードそのものは明かさない (次の会議も同じ手が使えるように)。
             LateTask.New(() => Utils.SendMessage(string.Format(GetString("WordKiller.Censored"), name), 255, CustomRoles.WordKiller.ColoredTextByRole(GetString("WordKiller.Title")), importance: MessageImportance.High), 0.6f, "WordKiller Msg");
         }, 0.2f, "WordKiller Censor");
-    }
-
-    public override void OnMurder(PlayerControl killer, PlayerControl target)
-    {
-        if (killer.PlayerId == target.PlayerId) return;
-        killer.SetAbilityUseLimit(killer.GetAbilityUseLimit() + AbilityUseGainWithEachKill.GetFloat());
     }
 
     // GetSuffix で仕掛けたワードを表示することは意図的にしていない。

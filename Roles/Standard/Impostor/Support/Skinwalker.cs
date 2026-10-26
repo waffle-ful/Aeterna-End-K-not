@@ -18,6 +18,7 @@ public class Skinwalker : RoleBase
     private static OptionItem ImpostorVision;
     private static OptionItem MaxUsage;
     private static OptionItem CopyLevel;
+    // キルでの回数増は Utils.IncreaseAbilityUseLimitOnKill がこのオプション名で拾う (役職側で足すと二重になる)
     private static OptionItem AbilityUseGainWithEachKill;
 
     // 偽装中の Skinwalker.PlayerId → 情報
@@ -92,12 +93,6 @@ public class Skinwalker : RoleBase
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
         opt.SetVision(ImpostorVision.GetBool());
-    }
-
-    public override void OnMurder(PlayerControl killer, PlayerControl target)
-    {
-        if (killer.Is(CustomRoles.Skinwalker) && AbilityUseGainWithEachKill.GetFloat() > 0)
-            killer.RpcIncreaseAbilityUseLimitBy(AbilityUseGainWithEachKill.GetFloat());
     }
 
     public override bool CheckReportDeadBody(PlayerControl reporter, NetworkedPlayerInfo target, PlayerControl killer)

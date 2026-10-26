@@ -31,6 +31,7 @@ public class Babel : RoleBase
 
     private static OptionItem KillCooldown;
     private static OptionItem AbilityUseLimit;
+    // キルでの回数増は Utils.IncreaseAbilityUseLimitOnKill がこのオプション名で拾う (役職側で足すと二重になる)
     private static OptionItem AbilityUseGainWithEachKill;
     private static OptionItem MinLength;
     private static OptionItem GraceCount;
@@ -354,12 +355,6 @@ public class Babel : RoleBase
 
             LateTask.New(() => Utils.SendMessage(string.Format(GetString("Babel.Violated"), name), 255, CustomRoles.Babel.ColoredTextByRole(GetString("Babel.Title")), importance: MessageImportance.High), 0.6f, "Babel Msg");
         }, 0.2f, "Babel Censor");
-    }
-
-    public override void OnMurder(PlayerControl killer, PlayerControl target)
-    {
-        if (killer.PlayerId == target.PlayerId) return;
-        killer.SetAbilityUseLimit(killer.GetAbilityUseLimit() + AbilityUseGainWithEachKill.GetFloat());
     }
 
     // GetSuffix で今の縛りを表示することは意図的にしていない。縛りは全員へ定期通知済みなので、

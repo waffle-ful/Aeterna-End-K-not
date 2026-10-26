@@ -27,7 +27,7 @@ namespace EndKnot.Roles;
 //     復帰」なので、RpcRevive (ExtendedPlayerControl.cs) に倣いキルクールダウンも
 //     明示的に再アサートする。
 //   - タスク完了で回数増 (クルー専用) は削除し、キル成立で回数増に置換
-//     (Skinwalker.OnMurder と同型)。
+//     (Utils.IncreaseAbilityUseLimitOnKill がオプション名で拾う)。
 // ============================================================
 public class EvilBusker : RoleBase
 {
@@ -37,6 +37,7 @@ public class EvilBusker : RoleBase
     public static OptionItem AbilityCooldown;
     public static OptionItem AbilityDuration;
     private static OptionItem AbilityUseLimit;
+    // キルでの回数増は Utils.IncreaseAbilityUseLimitOnKill がこのオプション名で拾う (役職側で足すと二重になる)
     private static OptionItem AbilityUseGainWithEachKill;
 
     private byte EvilBuskerId;
@@ -191,12 +192,6 @@ public class EvilBusker : RoleBase
 
         if (!buskerPc.IsAlive()) return;
         ChatManager.ClearChat(buskerPc);
-    }
-
-    public override void OnMurder(PlayerControl killer, PlayerControl target)
-    {
-        if (killer.Is(CustomRoles.EvilBusker) && AbilityUseGainWithEachKill.GetFloat() > 0)
-            killer.RpcIncreaseAbilityUseLimitBy(AbilityUseGainWithEachKill.GetFloat());
     }
 
     public void ReceiveRPC(MessageReader reader)
