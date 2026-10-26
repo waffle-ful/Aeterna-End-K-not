@@ -49,6 +49,49 @@ internal static class HudManagerPatch
         LowerInfoText.text = string.Empty;
     }
 
+    // ボタンのクールダウン表示と有効/無効は本編が毎フレーム書き戻す。表示系を FixedUpdate の無いフレームへ回している間
+    // (FixedUpdateCaller.DeferDisplay) も、mod がそこへ書く分だけは従来どおり FixedUpdate のここで書く。別のフレームで書くと
+    // mod の状態と本編の状態が 1 フレームおきに入れ替わってボタンが点滅する。
+    public static void ButtonLane(HudManager __instance)
+    {
+        try
+        {
+            PlayerControl player = PlayerControl.LocalPlayer;
+            if (!Il2Direct.Alive(player) || !AmongUsClient.Instance.IsGameStarted || !SetHudActivePatch.IsActive) return;
+
+            var abilityButton = __instance.AbilityButton;
+
+            if (player.IsAlive() || Options.CurrentGameMode != CustomGameMode.Standard)
+            {
+                WriteShapeshiftTimer(player, abilityButton, player.IsShifted());
+                if (!Main.PlayerStates.ContainsKey(player.PlayerId)) return;
+                if (ForcesAbilityEnabled(player, player.UsesPetInsteadOfKill())) abilityButton?.SetEnabled();
+            }
+            else
+                abilityButton?.SetEnabled();
+        }
+        catch (Exception e)
+        {
+            if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
+            else Utils.ThrowException(e);
+        }
+    }
+
+    private static void WriteShapeshiftTimer(PlayerControl player, AbilityButton button, bool shapeshifting)
+    {
+        if (player.Data.Role is not ShapeshifterRole ssrole || player.shapeshifting) return;
+
+        float timer = shapeshifting ? ssrole.durationSecondsRemaining : ssrole.cooldownSecondsRemaining;
+        if (timer <= 0f) return;
+
+        Color color = shapeshifting ? new Color32(0, 165, 255, 255) : Color.white;
+        button.cooldownTimerText.text = Utils.ColorString(color, Mathf.CeilToInt(timer).ToString());
+        button.cooldownTimerText.gameObject.SetActive(true);
+    }
+
+    private static bool ForcesAbilityEnabled(PlayerControl player, bool usesPetInsteadOfKill) =>
+        (usesPetInsteadOfKill && player.Is(CustomRoles.Nimble) && player.GetRoleTypes() == RoleTypes.Engineer) || player.Is(CustomRoles.GM);
+
     public static void Postfix(HudManager __instance)
     {
         try
@@ -213,18 +256,7 @@ internal static class HudManagerPatch
             {
                 if (player.IsAlive() || Options.CurrentGameMode != CustomGameMode.Standard)
                 {
-                    if (player.Data.Role is ShapeshifterRole ssrole && !player.shapeshifting)
-                    {
-                        float timer = shapeshifting ? ssrole.durationSecondsRemaining : ssrole.cooldownSecondsRemaining;
-                        AbilityButton button = abilityButton;
-
-                        if (timer > 0f)
-                        {
-                            Color color = shapeshifting ? new Color32(0, 165, 255, 255) : Color.white;
-                            button.cooldownTimerText.text = Utils.ColorString(color, Mathf.CeilToInt(timer).ToString());
-                            button.cooldownTimerText.gameObject.SetActive(true);
-                        }
-                    }
+                    if (!FixedUpdateCaller.DeferDisplay) WriteShapeshiftTimer(player, abilityButton, shapeshifting);
 
                     CustomRoles role = player.GetCustomRole();
                     if (!GameStates.IsEnded && Amnesia.TryGetConcealedRole(player.PlayerId, out CustomRoles amnesiaShownRole)) role = amnesiaShownRole;
@@ -439,7 +471,7 @@ internal static class HudManagerPatch
 
                     sub = AllocProbe.Mark("hud.b3.vent", sub);
 
-                    if ((usesPetInsteadOfKill && player.Is(CustomRoles.Nimble) && player.GetRoleTypes() == RoleTypes.Engineer) || player.Is(CustomRoles.GM))
+                    if (!FixedUpdateCaller.DeferDisplay && ForcesAbilityEnabled(player, usesPetInsteadOfKill))
                         abilityButton?.SetEnabled();
 
                     // 役職メーカーの役職は canSabotage (省略時は陣営どおり) に従う — 基底を借りているだけの
@@ -495,7 +527,7 @@ internal static class HudManagerPatch
                     ventButton?.Hide();
                     killButton?.Hide();
                     abilityButton?.Show();
-                    abilityButton?.SetEnabled();
+                    if (!FixedUpdateCaller.DeferDisplay) abilityButton?.SetEnabled();
                     abilityButton?.OverrideText(GetString(player.GetRoleTypes() == RoleTypes.GuardianAngel ? StringNames.ProtectAbility : StringNames.HauntAbilityName));
 
                     if (DemonicSupporter.IsAssigned(player.PlayerId))
@@ -1212,7 +1244,7 @@ internal static class TaskPanelBehaviourPatch
         Vector3 targetClosed = new Vector3(TaskPanel.closedPosition.x, taskingGm && TaskPanel.open ? y + 0.2f : defaultPos, TaskPanel.closedPosition.z);
         Vector3 targetOpen   = new Vector3(TaskPanel.openPosition.x,   taskingGm && TaskPanel.open ? y        : defaultPos, TaskPanel.openPosition.z);
 
-        float t = 1f - Mathf.Exp(-PosSmoothSpeed * Time.deltaTime);
+        float t = 1f - Mathf.Exp(-PosSmoothSpeed * FixedUpdateCaller.DisplayTickDelta);
 
         panel.closedPosition = Vector3.Lerp(panel.closedPosition, targetClosed, t);
         panel.openPosition   = Vector3.Lerp(panel.openPosition,   targetOpen,   t);
