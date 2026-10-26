@@ -562,6 +562,7 @@ internal static class ModManagerLateUpdatePatch
 
         try
         {
+            EndKnot.Modules.FixedUpdateCaller.OnLateUpdate();
             EndKnot.Modules.ImguiHost.Tick();
             ClientControlGUI gui = ClientControlGUI.Instance;
             if (EndKnot.Modules.Il2Direct.Alive(gui)) gui.TickToggle();

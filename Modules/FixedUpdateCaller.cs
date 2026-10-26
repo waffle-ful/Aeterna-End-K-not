@@ -40,151 +40,14 @@ public static class FixedUpdateCaller
             try { HealthLog.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
-            // UI/テキスト異常(stale/重複/別オブジェクト混線した補助 TMP)をクラッシュなしで観測・記録する。
-            // 既定OFF: シーン全体の FindObjectsOfType<TMP_Text> 走査が長時間で native working set を単調に
-            // 押し上げる(IL2CPP プロキシ churn)ため、UI 破損の診断時のみ EnableUiAnomalyWatch で有効化する。1/sec ゲート。
-            try { if (Main.EnableUiAnomalyWatch.Value && PerSecondUpdateScheduler.ShouldRunUpdate("ui-anomaly")) UiAnomalyWatch.Scan(); }
-            catch (Exception e) { Utils.ThrowException(e); }
-
-            // クラッシュ復帰の番犬(外部ウォッチドッグ)を CrashWatchdog オプションに追従させる。
-            // HUD/ローカルプレイヤー非依存でメニューからも武装できるようここで回す。1/sec ゲート。
-            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("watchdog-reconcile")) WatchdogLauncher.ReconcileWithOption(); }
-            catch (Exception e) { Utils.ThrowException(e); }
-
-            // AI実況相棒アプリを EnableAICommentary オプションに追従させる (ON=子プロセス起動 / OFF=停止)。1/sec ゲート。
-            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("companion-reconcile")) Companion.CompanionLauncher.ReconcileWithOption(); }
-            catch (Exception e) { Utils.ThrowException(e); }
+            // 前の tick の表示系がまだ走っていない (FixedUpdate が毎フレーム回る低 fps) なら、ここで先に済ませる
+            if (DisplayPending) RunDisplayTick();
 
             // 遠隔テストブリッジ(既定OFF)。毎 tick 呼び、ファイル stat 100ms / 周辺処理 1s の間引きは Tick 内で行う。
-            var sub = AllocProbe.Now(); // misc の内訳 (misc.* は tickKB へ二重計上されない)
             try { TestBridge.Tick(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
-            sub = AllocProbe.Mark("misc.bridge", sub);
-
-            // 当たり判定可視化 (/hitbox・既定OFF) の TTL 掃除。Enabled でなくても残存形状の破棄が要るため無条件で回す。
-            try { HitboxDebug.Tick(); }
-            catch (Exception e) { Utils.ThrowException(e); }
-
-            sub = AllocProbe.Mark("misc.hitbox", sub);
-
-            // BGM の番犬。死亡/GM ホストへのスロット切替と、外部要因で音源を失った時の復帰。1/sec ゲート。
-            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("bgm-watchdog")) BGMManager.Tick(); }
-            catch (Exception e) { Utils.ThrowException(e); }
-
-            sub = AllocProbe.Mark("misc.bgm", sub);
-
-            // BGM デコードバッファ在庫 (最大 ~45MB×2) のアイドル解放。曲替えが止まって5分で発火。
-            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("decode-pool-trim")) CustomSoundsManager.TrimIdleDecodePool(); }
-            catch (Exception e) { Utils.ThrowException(e); }
-
-            sub = AllocProbe.Mark("misc.pool", sub);
-
-            // チャット open/close 状態を毎フレーム overlay に反映。ローカルプレイヤー非依存で回す
-            // (メニュー・非ゲーム中でもチャットが開くため、LocalPlayer ガードの中では遅すぎる)。
-            try { TextBoxPatch.CheckChatOpen(); }
-            catch (Exception e) { Utils.ThrowException(e); }
-
-            AllocProbe.Mark("misc.chat", sub);
-            alloc = AllocProbe.Mark("misc", alloc);
-
-            var amongUsClient = AmongUsClient.Instance;
-            var lobbyBehaviour = LobbyBehaviour.Instance;
-
-            // ゲーム join の瞬間(シーン再構築中)は lobbyBehaviour/HudManager 配下のフィールドが一過性に
-            // fake-null になり、無ガードの deref が数フレーム連続 NRE を吐く(exflood 警告の主因)。各ブロックを
-            // 個別 try/catch で包み、join 窓のスパムを黙らせる(窓が抜ければ自然に正常化する)。
-            try
-            {
-                if (Il2Direct.Alive(lobbyBehaviour))
-                {
-                    LobbyFixedUpdatePatch.Postfix();
-                    LobbyBehaviourUpdatePatch.Postfix(lobbyBehaviour);
-
-                    long now = Utils.TimeStamp;
-
-                    if (now - LastFileLoadTS > 10)
-                    {
-                        LastFileLoadTS = now;
-                        Options.LoadUserData();
-                    }
-
-                    if (Options.EnableAutoMessage.GetBool() && now - LastAutoMessageSendTS > Options.AutoMessageSendInterval.GetInt())
-                    {
-                        LastAutoMessageSendTS = now;
-                        TemplateManager.SendTemplate("Notification", noErr: true, importance: MessageImportance.Low);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
-                else Utils.ThrowException(e);
-            }
-
-            alloc = AllocProbe.Mark("lobby", alloc);
-
-            try
-            {
-                if (HudManager.InstanceExists)
-                {
-                    HudManager hudManager = HudManager.Instance;
-
-                    HudManagerPatch.Postfix(hudManager);
-                    alloc = AllocProbe.Mark("hud", alloc);
-                    Zoom.Postfix();
-                    alloc = AllocProbe.Mark("zoom", alloc);
-                    HudSpritePatch.Postfix(hudManager);
-                }
-            }
-            catch (Exception e)
-            {
-                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
-                else Utils.ThrowException(e);
-            }
-
-            alloc = AllocProbe.Mark("hudspr", alloc);
-
-            // YouTube chat polling は HUD の有無と無関係に進める（ロビーから動かす前提）
-            try { YouTubeChatManager.Tick(UnityEngine.Time.fixedDeltaTime); }
-            catch (Exception e)
-            {
-                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
-                else Utils.ThrowException(e);
-            }
-
-            // YouTube ライブチャットへの自動投稿 (ホストローカル・HTTPのみ、RPCなし)
-            try { YouTubeChatPoster.Tick(UnityEngine.Time.fixedDeltaTime); }
-            catch (Exception e)
-            {
-                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
-                else Utils.ThrowException(e);
-            }
-
-            // 視聴者干渉 (Audience)。queue drain + キュー消化はメインスレッド専用。
-            try { EndKnot.Modules.Audience.AudienceManager.Tick(); }
-            catch (Exception e)
-            {
-                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
-                else Utils.ThrowException(e);
-            }
-
-            // ホストローカルの読み上げ (VoiceVox TTS)。メインスレッド必須なのでここで drain する。
-            try { EndKnot.Modules.VoiceVox.VoiceVoxManager.Tick(); }
-            catch (Exception e) { Utils.ThrowException(e); }
-
-            // サウンドの起動時プリロード (背景スレッドで先行デコード → ここで 1 tick 1 クリップ化)。
-            // 初回再生時の同期フルデコードによるフレームストール対策。
-            try { CustomSoundsManager.PreloadTick(); }
-            catch (Exception e) { Utils.ThrowException(e); }
-
-            // AI実況相棒アプリ向けイベント出力層 (join/leave/chat/intervention/phase/demo)。送信ゼロ・ホストローカルのみ。
-            try { EndKnot.Modules.Companion.CompanionEventEmitter.Tick(); }
-            catch (Exception e)
-            {
-                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
-                else Utils.ThrowException(e);
-            }
+            alloc = AllocProbe.Mark("bridge", alloc);
 
             try { VentilationSystemDeterioratePatch.TickVentSync(); }
             catch (Exception e) { Utils.ThrowException(e); }
@@ -195,16 +58,18 @@ public static class FixedUpdateCaller
             try { PacketRateGate.OnFixedUpdate(); }
             catch (Exception e) { Utils.ThrowException(e); }
 
-            // ローディング画面動画 (ホストローカル描画のみ)。シーン遷移中も生き延びる HudManager 配下なので
-            // InGame/AmHost に依存せず無条件で回す。
-            try { EndKnot.Modules.Media.LoadingScreenVideo.Tick(); }
-            catch (Exception e) { Utils.ThrowException(e); }
+            alloc = AllocProbe.Mark("net", alloc);
 
-            // メニュー背景の火エフェクト (ホストローカル描画のみ)。メニュー以外では即 return する。
-            try { EndKnot.Patches.CalamityMenu.CalamityFire.Tick(); }
-            catch (Exception e) { Utils.ThrowException(e); }
+            DisplayPending = true;
+            DisplayTickFrame = UnityEngine.Time.frameCount;
+            if (!DeferDisplay) RunDisplayTick();
 
-            alloc = AllocProbe.Mark("svc", alloc);
+            // 本編が毎フレーム書き戻すボタンの性質だけは、表示系を後回しにしていても従来どおりここで書く
+            if (DeferDisplay && HudManager.InstanceExists) HudManagerPatch.ButtonLane(HudManager.Instance);
+
+            alloc = AllocProbe.Mark("hudlane", alloc);
+
+            var amongUsClient = AmongUsClient.Instance;
 
             if (!Il2Direct.Alive(PlayerControl.LocalPlayer)) return;
 
@@ -400,5 +265,188 @@ public static class FixedUpdateCaller
             Utils.ThrowException(e);
         }
         finally { AllocProbe.FrameEnd(); }
+    }
+
+    // FixedUpdate (30Hz) は 2 フレームに 1 回しか回らず、そこに mod の仕事を全部載せると
+    // 「FixedUpdate のあるフレームだけ重い」交互の揺れになって遅いフレームが増える。
+    // 表示と端末ローカルのサービスだけは同じ tick ぶんを FixedUpdate の無い次のフレームの LateUpdate で回す。
+    // ゲーム進行・通信量の会計は FixedUpdate に残す。
+    private static bool DisplayPending;
+    public static bool DeferDisplay = true;
+    private static int DisplayTickFrame = -1;
+
+    // 表示系の 1 tick の長さ。LateUpdate から回るので Time.deltaTime は描画フレームの長さになり、tick の長さと合わない。
+    public static float DisplayTickDelta => UnityEngine.Time.fixedDeltaTime;
+
+    // ModManager.LateUpdate (全シーンで毎フレーム) から呼ぶ。
+    public static void OnLateUpdate()
+    {
+        if (!DisplayPending || UnityEngine.Time.frameCount == DisplayTickFrame) return;
+        RunDisplayTick();
+    }
+
+    private static void RunDisplayTick()
+    {
+        DisplayPending = false;
+        var alloc = AllocProbe.Now();
+
+        try
+        {
+            // UI/テキスト異常(stale/重複/別オブジェクト混線した補助 TMP)をクラッシュなしで観測・記録する。
+            // 既定OFF: シーン全体の FindObjectsOfType<TMP_Text> 走査が長時間で native working set を単調に
+            // 押し上げる(IL2CPP プロキシ churn)ため、UI 破損の診断時のみ EnableUiAnomalyWatch で有効化する。1/sec ゲート。
+            try { if (Main.EnableUiAnomalyWatch.Value && PerSecondUpdateScheduler.ShouldRunUpdate("ui-anomaly")) UiAnomalyWatch.Scan(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            // クラッシュ復帰の番犬(外部ウォッチドッグ)を CrashWatchdog オプションに追従させる。
+            // HUD/ローカルプレイヤー非依存でメニューからも武装できるようここで回す。1/sec ゲート。
+            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("watchdog-reconcile")) WatchdogLauncher.ReconcileWithOption(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            // AI実況相棒アプリを EnableAICommentary オプションに追従させる (ON=子プロセス起動 / OFF=停止)。1/sec ゲート。
+            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("companion-reconcile")) Companion.CompanionLauncher.ReconcileWithOption(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            var sub = AllocProbe.Now(); // misc の内訳 (misc.* は tickKB へ二重計上されない)
+
+            // 当たり判定可視化 (/hitbox・既定OFF) の TTL 掃除。Enabled でなくても残存形状の破棄が要るため無条件で回す。
+            try { HitboxDebug.Tick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            sub = AllocProbe.Mark("misc.hitbox", sub);
+
+            // BGM の番犬。死亡/GM ホストへのスロット切替と、外部要因で音源を失った時の復帰。1/sec ゲート。
+            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("bgm-watchdog")) BGMManager.Tick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            sub = AllocProbe.Mark("misc.bgm", sub);
+
+            // BGM デコードバッファ在庫 (最大 ~45MB×2) のアイドル解放。曲替えが止まって5分で発火。
+            try { if (PerSecondUpdateScheduler.ShouldRunUpdate("decode-pool-trim")) CustomSoundsManager.TrimIdleDecodePool(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            sub = AllocProbe.Mark("misc.pool", sub);
+
+            // チャット open/close 状態を毎フレーム overlay に反映。ローカルプレイヤー非依存で回す
+            // (メニュー・非ゲーム中でもチャットが開くため、LocalPlayer ガードの中では遅すぎる)。
+            try { TextBoxPatch.CheckChatOpen(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            AllocProbe.Mark("misc.chat", sub);
+            alloc = AllocProbe.Mark("misc", alloc);
+
+            var lobbyBehaviour = LobbyBehaviour.Instance;
+
+            // ゲーム join の瞬間(シーン再構築中)は lobbyBehaviour/HudManager 配下のフィールドが一過性に
+            // fake-null になり、無ガードの deref が数フレーム連続 NRE を吐く(exflood 警告の主因)。各ブロックを
+            // 個別 try/catch で包み、join 窓のスパムを黙らせる(窓が抜ければ自然に正常化する)。
+            try
+            {
+                if (Il2Direct.Alive(lobbyBehaviour))
+                {
+                    LobbyFixedUpdatePatch.Postfix();
+                    LobbyBehaviourUpdatePatch.Postfix(lobbyBehaviour);
+
+                    long now = Utils.TimeStamp;
+
+                    if (now - LastFileLoadTS > 10)
+                    {
+                        LastFileLoadTS = now;
+                        Options.LoadUserData();
+                    }
+
+                    if (Options.EnableAutoMessage.GetBool() && now - LastAutoMessageSendTS > Options.AutoMessageSendInterval.GetInt())
+                    {
+                        LastAutoMessageSendTS = now;
+                        TemplateManager.SendTemplate("Notification", noErr: true, importance: MessageImportance.Low);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
+                else Utils.ThrowException(e);
+            }
+
+            alloc = AllocProbe.Mark("lobby", alloc);
+
+            try
+            {
+                if (HudManager.InstanceExists)
+                {
+                    HudManager hudManager = HudManager.Instance;
+
+                    HudManagerPatch.Postfix(hudManager);
+                    alloc = AllocProbe.Mark("hud", alloc);
+                    Zoom.Postfix();
+                    alloc = AllocProbe.Mark("zoom", alloc);
+                    HudSpritePatch.Postfix(hudManager);
+                }
+            }
+            catch (Exception e)
+            {
+                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
+                else Utils.ThrowException(e);
+            }
+
+            alloc = AllocProbe.Mark("hudspr", alloc);
+
+            // YouTube chat polling は HUD の有無と無関係に進める（ロビーから動かす前提）
+            try { YouTubeChatManager.Tick(UnityEngine.Time.fixedDeltaTime); }
+            catch (Exception e)
+            {
+                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
+                else Utils.ThrowException(e);
+            }
+
+            // YouTube ライブチャットへの自動投稿 (ホストローカル・HTTPのみ、RPCなし)
+            try { YouTubeChatPoster.Tick(UnityEngine.Time.fixedDeltaTime); }
+            catch (Exception e)
+            {
+                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
+                else Utils.ThrowException(e);
+            }
+
+            // 視聴者干渉 (Audience)。queue drain + キュー消化はメインスレッド専用。
+            try { EndKnot.Modules.Audience.AudienceManager.Tick(); }
+            catch (Exception e)
+            {
+                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
+                else Utils.ThrowException(e);
+            }
+
+            // ホストローカルの読み上げ (VoiceVox TTS)。メインスレッド必須なのでここで drain する。
+            try { EndKnot.Modules.VoiceVox.VoiceVoxManager.Tick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            // サウンドの起動時プリロード (背景スレッドで先行デコード → ここで 1 tick 1 クリップ化)。
+            // 初回再生時の同期フルデコードによるフレームストール対策。
+            try { CustomSoundsManager.PreloadTick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            // AI実況相棒アプリ向けイベント出力層 (join/leave/chat/intervention/phase/demo)。送信ゼロ・ホストローカルのみ。
+            try { EndKnot.Modules.Companion.CompanionEventEmitter.Tick(); }
+            catch (Exception e)
+            {
+                if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) { /* join 窓の transient fake-null は黙殺 */ }
+                else Utils.ThrowException(e);
+            }
+
+            // ローディング画面動画 (ホストローカル描画のみ)。シーン遷移中も生き延びる HudManager 配下なので
+            // InGame/AmHost に依存せず無条件で回す。
+            try { EndKnot.Modules.Media.LoadingScreenVideo.Tick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            // メニュー背景の火エフェクト (ホストローカル描画のみ)。メニュー以外では即 return する。
+            try { EndKnot.Patches.CalamityMenu.CalamityFire.Tick(); }
+            catch (Exception e) { Utils.ThrowException(e); }
+
+            AllocProbe.Mark("svc", alloc);
+        }
+        catch (Exception e)
+        {
+            if (OnGameJoinedPatch.JoiningGame && e is NullReferenceException) return; // join 窓の transient fake-null は黙殺
+            Utils.ThrowException(e);
+        }
     }
 }

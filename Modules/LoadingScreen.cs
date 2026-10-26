@@ -68,7 +68,7 @@ internal static class LoadingScreen
     {
         try
         {
-            if (HintHideTimer <= 15f) HintHideTimer += Time.deltaTime;
+            if (HintHideTimer <= 15f) HintHideTimer += FixedUpdateCaller.DisplayTickDelta;
 
             PlayerControl lp = PlayerControl.LocalPlayer;
             if (!Il2Direct.Alive(lp) || !Il2Direct.Alive(lp.MyPhysics) || !Il2Direct.Alive(lp.MyPhysics.Animations)) return;
@@ -101,7 +101,7 @@ internal static class LoadingScreen
                 if (LoadingAnimation.transform.position != new Vector3(x, y, z))
                     LoadingAnimation.transform.position = new(x, y, z);
 
-                LoadingAnimation.transform.Rotate(Vector3.forward, 200f * Time.deltaTime);
+                LoadingAnimation.transform.Rotate(Vector3.forward, 200f * FixedUpdateCaller.DisplayTickDelta);
             }
 
             visible &= !GameStates.IsEnded;
