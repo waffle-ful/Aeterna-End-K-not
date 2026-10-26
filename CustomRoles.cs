@@ -643,6 +643,9 @@ public enum CustomRoles
     SandboxJackal,
     JackalPolice,
 
+    // Crewmate (appended)
+    SheriffHadouHo,
+
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)
     NotAssigned = 1000,
     Absorber,

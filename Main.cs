@@ -1126,6 +1126,7 @@ public class Main : BasePlugin
                 { CustomRoles.Missioneer, "#b1ae8f" },
                 { CustomRoles.JackalHadouHo, "#00b4eb" },
                 { CustomRoles.Tama, "#00b4eb" },
+                { CustomRoles.SheriffHadouHo, "#f8cd46" },
                 { CustomRoles.ForceFielder, "#4488ff" },
                 { CustomRoles.Riptide, "#0073ff" },
                 { CustomRoles.Crosswind, "#7ec8e3" },

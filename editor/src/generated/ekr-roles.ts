@@ -149,6 +149,7 @@ export const ROLE_META: readonly RoleMeta[] = [
   { id: "Sentinel", team: "crewmate", ja: "守衛", en: "Sentinel" },
   { id: "Sentry", team: "crewmate", ja: "衛兵", en: "Sentry" },
   { id: "Sheriff", team: "crewmate", ja: "シェリフ", en: "Sheriff" },
+  { id: "SheriffHadouHo", team: "crewmate", ja: "波動砲シェリフ", en: "Wave Cannon Sheriff" },
   { id: "Shiftguard", team: "crewmate", ja: "シフトガード", en: "Shiftguard" },
   { id: "ShrineMaiden", team: "crewmate", ja: "巫女", en: "Shrine Maiden" },
   { id: "Shyboy", team: "crewmate", ja: "シャイボーイ", en: "Shyboy" },

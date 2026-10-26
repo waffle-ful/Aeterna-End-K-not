@@ -776,6 +776,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Investor => RoleTypes.Impostor,
                 CustomRoles.Wizard => RoleTypes.Phantom,
                 CustomRoles.Mirage => RoleTypes.Phantom,
+                CustomRoles.SheriffHadouHo => RoleTypes.Phantom,
                 CustomRoles.Carrier => RoleTypes.Shapeshifter,
                 CustomRoles.WaveCannon => RoleTypes.Phantom,
                 CustomRoles.Crosswind => RoleTypes.Phantom,
@@ -1307,7 +1308,8 @@ internal static class CustomRolesHelper
                 CustomRoles.Akazukin or // 捕食中は死んでいるが OnFixedUpdate で復活予約と猶予切れを回している
                 CustomRoles.Weatherman or
                 CustomRoles.AntiReporter or // 死んでも通報妨害のタイマーを回し続けないと相手のロックが解けない
-                CustomRoles.Nova // 操縦中に死んだら☆をすぐ畳み、撃った矢は持ち主が死んでも飛ばし続ける (間引かれると 1〜3 秒止まる)
+                CustomRoles.Nova or // 操縦中に死んだら☆をすぐ畳み、撃った矢は持ち主が死んでも飛ばし続ける (間引かれると 1〜3 秒止まる)
+                CustomRoles.SheriffHadouHo // チャージ中・発射中に死んだらビームと音をすぐ片付ける (間引かれると 1〜3 秒残る)
                 // EKR logic: on_death 起点の fiber は死後も実行を続ける契約
                 // (「死んだら爆発」演出)。EkrManager.Pump() が毎 tick 呼ばれ続けないと wait() の解決が
                 // DontUpdateDeadPlayers (既定 ON) の間引き間隔 (60〜150 tick ≈ 1〜3秒) ぶん遅延する。
@@ -1901,6 +1903,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Retributionist => RoleOptionType.Crewmate_Killing,
                 CustomRoles.Sentinel => RoleOptionType.Crewmate_Killing,
                 CustomRoles.Sheriff => RoleOptionType.Crewmate_Killing,
+                CustomRoles.SheriffHadouHo => RoleOptionType.Crewmate_Killing,
                 CustomRoles.Veteran => RoleOptionType.Crewmate_Killing,
                 CustomRoles.Vigilante => RoleOptionType.Crewmate_Killing,
                 CustomRoles.Adrenaline => RoleOptionType.Crewmate_Power,
@@ -2212,6 +2215,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Strawdoll => CountTypes.Crew,
                 CustomRoles.CurseMaker => CountTypes.Crew,
                 CustomRoles.Missioneer => CountTypes.Crew,
+                CustomRoles.SheriffHadouHo => CountTypes.Crew,
                 CustomRoles.JackalHadouHo => CountTypes.Jackal,
                 CustomRoles.Tama => CountTypes.Jackal,
                 CustomRoles.NecroJackal => CountTypes.Jackal,

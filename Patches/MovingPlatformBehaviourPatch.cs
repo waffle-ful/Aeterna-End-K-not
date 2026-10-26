@@ -41,7 +41,7 @@ public static class MovingPlatformBehaviourPatch
         if (IsDisabled) return false;
 
         // 波動砲のチャージ中は移動を縛られている側なので、動く床でも抜け出せない
-        if (player != null && Roles.JackalHadouHo.IsInShotSequence(player.PlayerId)) return false;
+        if (player != null && (Roles.JackalHadouHo.IsInShotSequence(player.PlayerId) || Roles.SheriffHadouHo.IsInShotSequence(player.PlayerId))) return false;
 
         return true;
     }

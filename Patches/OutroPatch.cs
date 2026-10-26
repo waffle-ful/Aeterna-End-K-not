@@ -140,6 +140,7 @@ internal static class EndGamePatch
             // 波動砲系は充填中の見た目を戻す口が3本とも「試合が続いている」前提で、決着した瞬間に全部止まる
             if (state.Role is WaveCannon waveCannon) waveCannon.RestoreOnGameEnd(id);
             if (state.Role is JackalHadouHo hadouHo) hadouHo.RestoreOnGameEnd(id);
+            if (state.Role is SheriffHadouHo sheriffHadouHo) sheriffHadouHo.RestoreOnGameEnd(id);
 
             // Shadow のカモ解除はタイマー完了時にしか無く、試合終了ではキャンセル側へ倒れて解けない
             if (state.Role is Shadow shadow) shadow.RestoreOnGameEnd(id);

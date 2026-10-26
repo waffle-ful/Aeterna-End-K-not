@@ -68,7 +68,7 @@
 | アトラス (Atlas)<br><sub>From:ExtremeRoles</sub> | ドミニオン (Dominion)<br><sub>From:TownOfUs, ExtremeRoles</sub> | バベル (Babel)<br><sub>From:TownOfHost for E</sub> | リプレイ (Replay) |
 | ノヴァ (Nova)<br><sub>From:UchuAddon</sub> |  |  |  |
 
-### クルーメイト系 (179)
+### クルーメイト系 (180)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -116,7 +116,7 @@
 | 狼少年 (WolfBoy)<br><sub>From:TownOfHost-K</sub> | フォースフィールダー (ForceFielder) | あかづきん (Akazukin)<br><sub>From:SuperNewRoles</sub> | サンドボックス (Sandbox) |
 | オペレーティブ (Operative)<br><sub>From:EndlessHostRoles</sub> | サバイバー (Survivor)<br><sub>From:EndlessHostRoles</sub> | バウンサー (Bouncer)<br><sub>From:EndlessHostRoles</sub> | ジェミニ (Gemini)<br><sub>From:Project Lotus</sub> |
 | マップエクステンダー (MapExtender)<br><sub>From:TheOtherRoles</sub> | ポータルボタン (PortalButton) | レヴナント (Revenant)<br><sub>From:EndlessHostRoles</sub> | クルーメイト (Crewmate) |
-| ニュースキャスター (Newscaster) | ミラージュ (Mirage)<br><sub>From:NebulaontheShip</sub> | イベイダー (Evader)<br><sub>From:EndlessHostRoles</sub> |  |
+| ニュースキャスター (Newscaster) | ミラージュ (Mirage)<br><sub>From:NebulaontheShip</sub> | イベイダー (Evader)<br><sub>From:EndlessHostRoles</sub> | 波動砲シェリフ (SheriffHadouHo)<br><sub>From:TownOfHost-Pko</sub> |
 
 ### ニュートラル系 (141)
 
