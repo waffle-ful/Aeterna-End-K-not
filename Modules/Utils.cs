@@ -5238,6 +5238,8 @@ public static class Utils
 
         var filename = $"{f}/EndKnot-v{Main.PluginVersion}-LOG";
         string healthLog = EndKnot.Modules.HealthLog.FilePath;
+        try { EndKnot.Modules.HealthLog.FlushPending(); }
+        catch { }
 
         // 4MB ローテ (ClearLog) 経由では、この直後に log.html が新ヘッダで上書きされる。裏スレッドのコピー中に
         // truncate されると壊れたダンプになるため、コピーでなく rename (一瞬) で先に退避する。

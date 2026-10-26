@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using HarmonyLib;
 using InnerNet;
 using UnityEngine;
@@ -289,22 +291,23 @@ public static class HealthLog
             string basePath = OperatingSystem.IsAndroid() ? Main.DataPath : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
             string dir = Path.Combine(basePath, "EndKnot_Logs");
             Directory.CreateDirectory(dir);
-            FilePath = Path.Combine(dir, "EndKnot-Health.log");
-            TimelinePath = Path.Combine(dir, "EndKnot-Timeline.log");
+            // 書き込みは別スレッドからも来るので、パスを公開するのは退避が済んでから
+            string healthPath = Path.Combine(dir, "EndKnot-Health.log");
+            string timelinePath = Path.Combine(dir, "EndKnot-Timeline.log");
 
             // 前セッションの末尾(クラッシュ直前の heartbeat)を .prev に退避してから新規セッションを開始。
-            if (File.Exists(FilePath))
+            if (File.Exists(healthPath))
             {
                 string prev = Path.Combine(dir, "EndKnot-Health.prev.log");
 
                 try
                 {
                     if (File.Exists(prev)) File.Delete(prev);
-                    File.Move(FilePath, prev);
+                    File.Move(healthPath, prev);
                 }
                 catch
                 {
-                    try { if (new FileInfo(FilePath).Length > MaxFileBytes) File.Delete(FilePath); }
+                    try { if (new FileInfo(healthPath).Length > MaxFileBytes) File.Delete(healthPath); }
                     catch { }
                 }
             }
@@ -312,18 +315,21 @@ public static class HealthLog
             // Timeline は append-only。セッションをまたいで保持し、8MB で .prev ローテートのみ。
             try
             {
-                if (File.Exists(TimelinePath) && new FileInfo(TimelinePath).Length > MaxTimelineBytes)
+                if (File.Exists(timelinePath) && new FileInfo(timelinePath).Length > MaxTimelineBytes)
                 {
                     string tlPrev = Path.Combine(dir, "EndKnot-Timeline.prev.log");
                     try
                     {
                         if (File.Exists(tlPrev)) File.Delete(tlPrev);
-                        File.Move(TimelinePath, tlPrev);
+                        File.Move(timelinePath, tlPrev);
                     }
                     catch { }
                 }
             }
             catch { }
+
+            FilePath = healthPath;
+            TimelinePath = timelinePath;
 
             StartTs = Utils.TimeStamp;
             try { Proc = System.Diagnostics.Process.GetCurrentProcess(); }
@@ -1036,7 +1042,7 @@ public static class HealthLog
     {
         if (TimelinePath == null) return;
         long ts = System.Diagnostics.Stopwatch.GetTimestamp();
-        try { File.AppendAllText(TimelinePath, $"sid={StartTs} {line}\n"); }
+        try { Enqueue(TimelinePath, $"sid={StartTs} {line}\n"); }
         catch { }
         finally { AllocProbe.AddTime("logio", ts); }
     }
@@ -1196,11 +1202,101 @@ public static class HealthLog
     private static void Write(string line)
     {
         if (FilePath == null) return;
-        // 同期 I/O (open/write/close 毎行) の実時間を logio 系統へ積む — ディスク側のスパイクがヒッチに化けていないかの計器
+        // 呼び出し側に残る費用 (キューへ積むだけ) を logio 系統へ積む
         long ts = System.Diagnostics.Stopwatch.GetTimestamp();
-        try { File.AppendAllText(FilePath, line + "\n"); }
+        try { Enqueue(FilePath, line + "\n"); }
         catch { }
         finally { AllocProbe.AddTime("logio", ts); }
+    }
+
+    // 1 行ごとの open/write/close は 0.3〜0.7ms かかり、FixedUpdate のあるフレームに乗ると
+    // そのまま遅いフレームになる (1 試合で HB/ALLOC 等が約 100 行 = 遅い 1% とほぼ同じ本数)。
+    // 行は積むだけにして、専用スレッドが積まれた順に同じファイルの分をまとめて書く。
+    private const int MaxPendingLines = 4096; // 書けない状態が続いた時に積み続けない上限
+    private static readonly ConcurrentQueue<(string Path, string Text)> PendingLines = new();
+    private static readonly AutoResetEvent PendingSignal = new(false);
+    private static readonly object FlushLock = new();
+    private static int _pendingCount;
+    private static int _writerStarted;
+    private static int _droppedLines; // 上限で捨てた行数。次に書けた時に 1 行で残す
+
+    private static void Enqueue(string path, string text)
+    {
+        if (Interlocked.Increment(ref _pendingCount) > MaxPendingLines)
+        {
+            Interlocked.Decrement(ref _pendingCount);
+            Interlocked.Increment(ref _droppedLines);
+            return;
+        }
+
+        PendingLines.Enqueue((path, text));
+
+        if (Interlocked.Exchange(ref _writerStarted, 1) == 0)
+        {
+            try
+            {
+                new Thread(WriterLoop) { IsBackground = true, Name = "EndKnot.HealthLogWriter" }.Start();
+                AppDomain.CurrentDomain.ProcessExit += (_, _) => FlushPending();
+            }
+            catch
+            {
+                // スレッドが立たない時は呼び出し元で書く (_writerStarted は 1 のまま = 以後も積んだ側が書く)
+                _writerFailed = true;
+            }
+        }
+
+        if (_writerFailed) FlushPending();
+        else PendingSignal.Set();
+    }
+
+    private static volatile bool _writerFailed;
+
+    private static void WriterLoop()
+    {
+        while (true)
+        {
+            try
+            {
+                PendingSignal.WaitOne();
+                FlushPending();
+            }
+            catch { }
+        }
+    }
+
+    // 積まれている行を今すぐ書く。ログを読む・同梱する直前にも呼ぶ。
+    public static void FlushPending()
+    {
+        lock (FlushLock)
+        {
+            string path = null;
+            var sb = new StringBuilder(256);
+
+            while (PendingLines.TryDequeue(out (string Path, string Text) e))
+            {
+                Interlocked.Decrement(ref _pendingCount);
+
+                if (path != null && path != e.Path)
+                {
+                    AppendSafe(path, sb.ToString());
+                    sb.Clear();
+                }
+
+                path = e.Path;
+                sb.Append(e.Text);
+            }
+
+            if (path != null && sb.Length > 0) AppendSafe(path, sb.ToString());
+
+            int dropped = Interlocked.Exchange(ref _droppedLines, 0);
+            if (dropped > 0 && FilePath != null) AppendSafe(FilePath, $"LOGDROP lines={dropped}\n");
+        }
+    }
+
+    private static void AppendSafe(string path, string text)
+    {
+        try { File.AppendAllText(path, text); }
+        catch { }
     }
 }
 
