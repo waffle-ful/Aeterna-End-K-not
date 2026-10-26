@@ -978,6 +978,9 @@ public static class BugReport
         try { Logger.FlushNow(); }
         catch { /* 取れた分だけ送る */ }
 
+        try { HealthLog.FlushPending(); }
+        catch { /* 取れた分だけ送る */ }
+
         string context = BuildContext();
         string logOutput = Path.Combine(Paths.BepInExRootPath, "LogOutput.log");
         string html = CustomLogger.LOGFilePath;

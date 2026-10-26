@@ -499,9 +499,8 @@ public static class PacketRateGate
         {
             // 恒久チャネルへはエピソード開始の1回だけに絞る。log.html 側は従来どおり峰の更新ごとに出すが、
             // 07-31 実測で1分に79行出たので、そのまま Health.log へ流すと台帳が埋まって使い物にならない。
-            // ⚠️ NoteAnom は Write + Timeline = 無バッファ File.AppendAllText ×2 で、しかもここは
-            // 全 SendOrDisconnect が通るホットパス。閾値付近で total が振動すると start/end が交互に連発して
-            // バースト計測窓のど真ん中でディスク I/O を撒くので、クールダウンで必ず抑える。
+            // ⚠️ NoteAnom は Write + Timeline の 2 行を積み、しかもここは全 SendOrDisconnect が通るホットパス。
+            // 閾値付近で total が振動すると start/end が交互に連発して行が溢れるので、クールダウンで必ず抑える。
             if (PeakWarned == 0 && Utils.TimeStamp - _lastBurstNoteTs >= BurstNoteCooldownSeconds)
             {
                 _lastBurstNoteTs = Utils.TimeStamp;
