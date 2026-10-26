@@ -15,10 +15,34 @@ public static class Zoom
     // Freeplay zooms while alive too, so the whole ship can be seen when placing spawn points.
     public static bool CanZoom => ((GameStates.IsShip && !GameStates.IsMeeting && GameStates.IsCanMove && (!PlayerControl.LocalPlayer.IsAlive() || GameStates.IsFreePlay)) || (GameStates.IsLobby && GameStates.IsCanMove)) && !InGameRoleInfoMenu.Showing;
 
+    // ホイールの 1 ノッチは 1 フレームしか値が出ないが、Postfix は表示の tick (30Hz) でしか回らない。
+    // 毎フレーム足し込んでおき、tick で使い切る。
+    private static float PendingScroll;
+    private static int PendingScrollFrame = -1;
+
+    // FixedUpdateCaller.OnLateUpdate (全シーンで毎フレーム) から呼ぶ。
+    public static void LatchScroll()
+    {
+        float y = Input.mouseScrollDelta.y;
+        if (y == 0f) return;
+        PendingScroll += y;
+        PendingScrollFrame = Time.frameCount;
+    }
+
+    private static float TakeScroll()
+    {
+        float y = PendingScroll;
+        PendingScroll = 0f;
+        // tick が回っていなかった間 (シーン切り替えなど) のホイールは使わない
+        return Time.frameCount - PendingScrollFrame > 4 ? 0f : y;
+    }
+
     public static void Postfix()
     {
         try
         {
+            float scroll = TakeScroll();
+
             if (!EndKnot.Modules.Il2Direct.Alive(Main)) Main = Camera.main;
             if (!EndKnot.Modules.Il2Direct.Alive(Main)) return;
 
@@ -68,7 +92,7 @@ public static class Zoom
                     }
 
                     // 配信のコメント板の上でのホイールは板のスクロールなので、ズームには使わない
-                    switch (EndKnot.Modules.YouTubeChat.YouTubeChatBubble.IsPointerOver() ? 0f : Input.mouseScrollDelta.y)
+                    switch (EndKnot.Modules.YouTubeChat.YouTubeChatBubble.IsPointerOver() ? 0f : scroll)
                     {
                         case > 0:
                         {
