@@ -265,7 +265,7 @@ public static class LobbyCodeRainbow
 
         if (!Active || SlotStep == null) return;
 
-        var step = (int)(Time.time / CycleSeconds * Steps) % Steps;
+        var step = (int)(Il2Direct.GameTime / CycleSeconds * Steps) % Steps;
         if (step < 0) step += Steps;
         if (step == SettledStep) return;
 
@@ -328,7 +328,7 @@ public static class LobbyCodeRainbow
     {
         const float stepSeconds = CycleSeconds / Steps;
         int layers = Auras.Length - StrokeDirections + 1; // 光の層 + 本体 (縁取りは段で変わらない)
-        int budget = (int)Math.Ceiling(layers * Time.deltaTime / stepSeconds);
+        int budget = (int)Math.Ceiling(layers * Il2Direct.DeltaTime / stepSeconds);
         return Math.Clamp(budget, 1, layers);
     }
 

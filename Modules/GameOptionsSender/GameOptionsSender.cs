@@ -174,7 +174,7 @@ public abstract class GameOptionsSender
         {
             while (GameStates.InGame || GameStates.IsLobby)
             {
-                float cycleStart = Time.realtimeSinceStartup;
+                float cycleStart = Il2Direct.RealtimeSinceStartup;
 
                 if (GameStates.InGame)
                 {
@@ -266,7 +266,7 @@ public abstract class GameOptionsSender
                 // それが毎フレーム dirty を立てる書き手 (Spurt/Dynamo の MarkDirtySettings) の送信要求を
                 // 隠蔽していた。リーク修正でループが設計速度に戻ったため、PackedFlush が Reliable 予算
                 // (DataFlagRateLimiter 23/s) を独占して critical RPC を飢えさせないよう明示的に間引く。
-                while (Time.realtimeSinceStartup - cycleStart < MinCycleIntervalSeconds) yield return null;
+                while (Il2Direct.RealtimeSinceStartup - cycleStart < MinCycleIntervalSeconds) yield return null;
             }
         }
         finally

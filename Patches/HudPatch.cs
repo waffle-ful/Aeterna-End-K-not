@@ -202,7 +202,7 @@ internal static class HudManagerPatch
 
                     if (Options.AutoGMRotationEnabled)
                     {
-                        if (!AutoGMRotationStatusText)
+                        if (!Il2Direct.Alive(AutoGMRotationStatusText))
                         {
                             AutoGMRotationStatusText = Object.Instantiate(__instance.KillButton.cooldownTimerText, __instance.transform, true);
                             AutoGMRotationStatusText.alignment = TextAlignmentOptions.Left;
@@ -239,7 +239,7 @@ internal static class HudManagerPatch
             alloc = AllocProbe.Mark("hud.a", alloc);
 
             // The following will not be executed unless the game is in progress
-            if (!AmongUsClient.Instance.IsGameStarted) return;
+            if (!Il2Direct.IsGameStarted(AmongUsClient.Instance)) return;
             // ボタン参照は 1 tick に 1 回だけ interop 越しに取る (プロパティ get は呼ぶたびに wrapper を作る = il2cpp 側のゴミ)。
             var killButton = __instance.KillButton;
             var abilityButton = __instance.AbilityButton;
@@ -261,7 +261,7 @@ internal static class HudManagerPatch
                     CustomRoles role = player.GetCustomRole();
                     if (!GameStates.IsEnded && Amnesia.TryGetConcealedRole(player.PlayerId, out CustomRoles amnesiaShownRole)) role = amnesiaShownRole;
 
-                    if (!RoleTab) RoleTab = TaskPanelBehaviourPatch.CreateRoleTab(role);
+                    if (!Il2Direct.Alive(RoleTab)) RoleTab = TaskPanelBehaviourPatch.CreateRoleTab(role);
 
                     bool usesPetInsteadOfKill = player.UsesPetInsteadOfKill();
 
@@ -355,7 +355,7 @@ internal static class HudManagerPatch
 
                     alloc = AllocProbe.Mark("hud.b1", alloc);
 
-                    if (!LowerInfoText)
+                    if (!Il2Direct.Alive(LowerInfoText))
                     {
                         LowerInfoText = Object.Instantiate(killButton.cooldownTimerText, __instance.transform, true);
                         LowerInfoText.alignment = TextAlignmentOptions.Center;
@@ -517,7 +517,7 @@ internal static class HudManagerPatch
                 else
                 {
                     // 画面下の文字は生存中の分岐でしか書き換えないので、死んだ瞬間に出ていた文字が残らないよう消す
-                    if (LowerInfoText && LowerInfoText.enabled)
+                    if (Il2Direct.Alive(LowerInfoText) && LowerInfoText.enabled)
                     {
                         LowerInfoText.text = string.Empty;
                         LowerInfoText.enabled = false;
@@ -656,7 +656,7 @@ public static class ButtonCooldownPatch
     [HarmonyPostfix]
     public static void Postfix(ActionButton __instance, ref float timer)
     {
-        if (!__instance.isActiveAndEnabled) return;
+        if (!Il2Direct.IsActiveAndEnabled(__instance)) return;
         if (!Main.ButtonCooldownInDecimalUnder10s.Value) return;
 
         if (__instance.isCoolingDown)
@@ -1607,7 +1607,7 @@ internal static class TaskPanelBehaviourPatch
         {
             if (!Il2Direct.Alive(TabText)) TabText = __instance.tab.transform.FindChild("TabText_TMP").GetComponent<TextMeshPro>();
 
-            float now = Time.unscaledTime;
+            float now = Il2Direct.UnscaledTime;
 
             if (now >= nextTabTextAt)
             {
@@ -1659,10 +1659,10 @@ internal static class TaskPanelBehaviourPatch
         }
 
         Transform transform = RolePanelBgTf;
-        Bounds bgBounds = RolePanelBg.sprite.bounds;
-        Vector3 vector = bgBounds.extents;
+        Bounds bgBounds = Il2Direct.SpriteBounds(RolePanelBg.sprite);
+        Vector3 vector = bgBounds.m_Extents;
         float bgSizeX = vector.x * 2f;
-        Vector3 vector2 = RolePanelTabSr.sprite.bounds.extents;
+        Vector3 vector2 = Il2Direct.SpriteBounds(RolePanelTabSr.sprite).m_Extents;
         Vector3 textSize = RolePanelTaskText.textBounds.size;
 
         // 書いた値を手元に持ち、同じフレーム内の読み戻し (1 回ごとにゲーム側ヒープへ箱が出る) をしない
@@ -1699,7 +1699,7 @@ internal static class TaskPanelBehaviourPatch
             __instance.closedPosition.z);
         __instance.closedPosition = closePosition;
 
-        float deltaTime = Time.deltaTime;
+        float deltaTime = Il2Direct.DeltaTime;
 
         __instance.timer = __instance.open
             ? Math.Min(1f, __instance.timer + (deltaTime / __instance.animationTimeSeconds))

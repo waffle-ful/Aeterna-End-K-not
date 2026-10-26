@@ -121,10 +121,10 @@ public static class BackroomsShadow
             if (Il2Direct.Alive(_shadowCam) && Il2Direct.Alive(mainCam))
             {
                 if (!Il2Direct.Alive(_shadowCamCam)) _shadowCamCam = _shadowCam.GetComponent<Camera>();
-                Vector3 mc = mainCam.transform.position;
-                Vector3 sc = _shadowCam.transform.position;
+                Vector3 mc = Il2Direct.Position(mainCam.transform);
+                Vector3 sc = Il2Direct.Position(_shadowCam.transform);
                 _shadowCam.transform.position = new Vector3(mc.x, mc.y, sc.z); // z は ShadowCamera 固有を維持
-                if (Il2Direct.Alive(_shadowCamCam)) _shadowCamCam.orthographicSize = mainCam.orthographicSize;
+                if (Il2Direct.Alive(_shadowCamCam)) _shadowCamCam.orthographicSize = Il2Direct.OrthographicSize(mainCam);
             }
 
             // light origin = body center (transform.position)。ShadowCamera も Camera.main(≒body center)に
@@ -135,7 +135,7 @@ public static class BackroomsShadow
             //   no-clip trap は GetTruePosition(collider.offset=127) の話で transform.position は無関係 → 安全。
             // ls.renderer はバニラ LightSource.Update がロビーでも毎フレーム描いている (2026-10-03 実機: 自前 Render の
             // 有無で同じ絵)。手で描くのはバニラが持っていない自前 renderer の時だけ。
-            Vector3 body = lp.transform.position;
+            Vector3 body = Il2Direct.Position(lp.transform);
             Vector2 origin = new(body.x, body.y);
             if (_ownRenderer != null) r.Render(origin);
 
@@ -176,11 +176,11 @@ public static class BackroomsShadow
                 catch (Exception ex) { lcInfo = $"LightChild EXC {ex.Message}"; }
 
                 // ★診断: body center / camera の関係 (camera-vs-player の真のオフセットを実測)
-                Vector3 camPos = mainCam != null ? mainCam.transform.position : Vector3.zero;
+                Vector3 camPos = mainCam != null ? Il2Direct.Position(mainCam.transform) : Vector3.zero;
                 // ★診断: 二重壁 gating の active 面本数 (dark-walls 報告時 gating 未実行=0/0 vs 効いてない の切り分け)
                 (int gateHi, int gateLo) = BackroomsCasters.GateCounts();
                 Logger.Info(
-                    $"[driver] body=({body.x:F2},{body.y:F2}) cam=({camPos.x:F2},{camPos.y:F2}) origin=({origin.x:F2},{origin.y:F2}) ortho={(mainCam != null ? mainCam.orthographicSize : 0):F1} viewDist={ls.ViewDistance:F1} | {hitsInfo} gateHi={gateHi} gateLo={gateLo} | OverlapShadowMask={omMask} OverlapLayer10={om10} | {lcInfo}",
+                    $"[driver] body=({body.x:F2},{body.y:F2}) cam=({camPos.x:F2},{camPos.y:F2}) origin=({origin.x:F2},{origin.y:F2}) ortho={(mainCam != null ? Il2Direct.OrthographicSize(mainCam) : 0):F1} viewDist={ls.ViewDistance:F1} | {hitsInfo} gateHi={gateHi} gateLo={gateLo} | OverlapShadowMask={omMask} OverlapLayer10={om10} | {lcInfo}",
                     Tag);
             }
         }
@@ -261,7 +261,7 @@ public static class BackroomsShadow
     {
         try
         {
-            if (!HudManager.InstanceExists) return;
+            if (!Il2Direct.Exists<HudManager>()) return;
             MeshRenderer quad = HudManager.Instance.ShadowQuad;
             if (!Il2Direct.Alive(quad)) return;
             Material m = quad.material;

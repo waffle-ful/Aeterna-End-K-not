@@ -244,7 +244,7 @@ internal static class OnGameJoinedPatch
                     while (timer > 0)
                     {
                         if (!GameStates.IsLobby) yield break;
-                        timer -= Time.deltaTime;
+                        timer -= Il2Direct.DeltaTime;
                         yield return null;
                     }
 
@@ -264,7 +264,7 @@ internal static class OnGameJoinedPatch
                     while (timer > 0)
                     {
                         if (!GameStates.IsLobby) yield break;
-                        timer -= Time.deltaTime;
+                        timer -= Il2Direct.DeltaTime;
                         yield return null;
                     }
 
@@ -284,7 +284,7 @@ internal static class OnGameJoinedPatch
                     while (timer > 0)
                     {
                         if (!GameStates.IsLobby) yield break;
-                        timer -= Time.deltaTime;
+                        timer -= Il2Direct.DeltaTime;
                         yield return null;
                     }
 
@@ -304,7 +304,7 @@ internal static class OnGameJoinedPatch
                     while (timer > 0)
                     {
                         if (!GameStates.IsLobby) yield break;
-                        timer -= Time.deltaTime;
+                        timer -= Il2Direct.DeltaTime;
                         yield return null;
                     }
 
@@ -339,7 +339,7 @@ internal static class OnGameJoinedPatch
                     while (timer > 0)
                     {
                         if (!GameStates.IsLobby) yield break;
-                        timer -= Time.deltaTime;
+                        timer -= Il2Direct.DeltaTime;
                         yield return null;
                     }
 

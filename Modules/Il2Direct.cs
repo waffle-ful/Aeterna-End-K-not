@@ -218,7 +218,17 @@ public static unsafe class Il2Direct
         _shadowLeft = calls;
     }
 
-    public static string ShadowReport() => $"OK il2direct shadow left={_shadowLeft} true={_shadowTrue} mismatch={_shadowMismatch} ready={_staticsState} aliveOffset={_cachedPtrOffset} aliveChecks={_aliveChecks}";
+    public static string ShadowReport()
+    {
+        var sb = new System.Text.StringBuilder(512);
+        sb.Append($"OK il2direct shadow left={_shadowLeft} true={_shadowTrue} mismatch={_shadowMismatch} ready={_staticsState} aliveOffset={_cachedPtrOffset} aliveChecks={_aliveChecks} clock={_clockState}");
+
+        // 読み取り口ごとの状態 (1 = 直接呼び / 2 = ラッパー経路に落ちた) と突き合わせ済みの回数
+        foreach (Reader r in new[] { RPosition, ROrtho, RActiveSelf, RActiveAndEnabled, RColliderBounds, RSpriteBounds, RAmHost, RIsGameStarted, RIsGamePublic, RAmOwner, REventType })
+            sb.Append(' ').Append(r.Name).Append('=').Append(r.State).Append('/').Append(r.Checks);
+
+        return sb.ToString();
+    }
 
     // 突き合わせ窓の間だけ、代表的なキーを毎 tick 自分で読む (キー読みの呼び出し元が動いていない画面・環境でも窓を進めるため)
     public static void ShadowPoll()
@@ -283,6 +293,277 @@ public static unsafe class Il2Direct
             return false;
         }
     }
+
+    // ---- 毎フレーム読まれる Time / Input の静的な読み取り ----
+    // 上のキー読みと別の組にしておく (片方が使えない環境でも、もう片方は直接呼びのまま使える)
+
+    private static Method _unscaledTime, _realtime, _time, _deltaTime, _unscaledDeltaTime, _fixedDeltaTime, _frameCount;
+    private static Method _mousePosition, _mouseScroll, _mouseButton, _mouseButtonDown, _mouseButtonUp;
+    private static int _clockState; // 0 = 未解決 / 1 = 使える / 2 = 使えない (ラッパー経路のまま)
+
+    public static float UnscaledTime => Enabled && ClockReady() ? StaticFloat(_unscaledTime) : Time.unscaledTime;
+    public static float RealtimeSinceStartup => Enabled && ClockReady() ? StaticFloat(_realtime) : Time.realtimeSinceStartup;
+    /// <summary>Time.time と同じ。</summary>
+    public static float GameTime => Enabled && ClockReady() ? StaticFloat(_time) : Time.time;
+    /// <summary>Time.deltaTime と同じ (FixedUpdate の中では fixedDeltaTime を返すのも同じ)。</summary>
+    public static float DeltaTime => Enabled && ClockReady() ? StaticFloat(_deltaTime) : Time.deltaTime;
+    public static float UnscaledDeltaTime => Enabled && ClockReady() ? StaticFloat(_unscaledDeltaTime) : Time.unscaledDeltaTime;
+    public static float FixedDeltaTime => Enabled && ClockReady() ? StaticFloat(_fixedDeltaTime) : Time.fixedDeltaTime;
+    public static int FrameCount => Enabled && ClockReady() ? ((delegate* unmanaged[Cdecl]<IntPtr, int>)_frameCount.Ptr)(_frameCount.Info) : Time.frameCount;
+    public static Vector3 MousePosition => Enabled && ClockReady() ? ((delegate* unmanaged[Cdecl]<IntPtr, Vector3>)_mousePosition.Ptr)(_mousePosition.Info) : Input.mousePosition;
+    public static Vector2 MouseScrollDelta => Enabled && ClockReady() ? ((delegate* unmanaged[Cdecl]<IntPtr, Vector2>)_mouseScroll.Ptr)(_mouseScroll.Info) : Input.mouseScrollDelta;
+    public static bool GetMouseButton(int button) => Enabled && ClockReady() ? StaticIntBool(_mouseButton, button) : Input.GetMouseButton(button);
+    public static bool GetMouseButtonDown(int button) => Enabled && ClockReady() ? StaticIntBool(_mouseButtonDown, button) : Input.GetMouseButtonDown(button);
+    public static bool GetMouseButtonUp(int button) => Enabled && ClockReady() ? StaticIntBool(_mouseButtonUp, button) : Input.GetMouseButtonUp(button);
+
+    private static float StaticFloat(in Method m) => ((delegate* unmanaged[Cdecl]<IntPtr, float>)m.Ptr)(m.Info);
+    private static bool StaticIntBool(in Method m, int arg) => ((delegate* unmanaged[Cdecl]<int, IntPtr, byte>)m.Ptr)(arg, m.Info) != 0;
+
+    private static bool ClockReady()
+    {
+        if (_clockState != 0) return _clockState == 1;
+
+        _clockState = 2;
+        _unscaledTime = Resolve<Time>("get_unscaledTime", 0);
+        _realtime = Resolve<Time>("get_realtimeSinceStartup", 0);
+        _time = Resolve<Time>("get_time", 0);
+        _deltaTime = Resolve<Time>("get_deltaTime", 0);
+        _unscaledDeltaTime = Resolve<Time>("get_unscaledDeltaTime", 0);
+        _fixedDeltaTime = Resolve<Time>("get_fixedDeltaTime", 0);
+        _frameCount = Resolve<Time>("get_frameCount", 0);
+        _mousePosition = Resolve<Input>("get_mousePosition", 0);
+        _mouseScroll = Resolve<Input>("get_mouseScrollDelta", 0);
+        _mouseButton = Resolve<Input>("GetMouseButton", 1);
+        _mouseButtonDown = Resolve<Input>("GetMouseButtonDown", 1);
+        _mouseButtonUp = Resolve<Input>("GetMouseButtonUp", 1);
+
+        if (!_unscaledTime.Ok || !_realtime.Ok || !_time.Ok || !_deltaTime.Ok || !_unscaledDeltaTime.Ok || !_fixedDeltaTime.Ok || !_frameCount.Ok) return Fail("resolve time");
+        if (!_mousePosition.Ok || !_mouseScroll.Ok || !_mouseButton.Ok || !_mouseButtonDown.Ok || !_mouseButtonUp.Ok) return Fail("resolve input");
+
+        // ラッパー経路を先に通し (エンジン側の例外はここで捕まえられる)、同じフレーム内の値と突き合わせる
+        // realtimeSinceStartup だけは読むたびに進むので幅を持たせる
+        try
+        {
+            float unscaled = Time.unscaledTime, time = Time.time, dt = Time.deltaTime, udt = Time.unscaledDeltaTime, fdt = Time.fixedDeltaTime;
+            int frame = Time.frameCount;
+            float rt = Time.realtimeSinceStartup;
+            Vector3 mouse = Input.mousePosition;
+            Vector2 scroll = Input.mouseScrollDelta;
+            Span<bool> held = stackalloc bool[3], down = stackalloc bool[3], up = stackalloc bool[3];
+
+            for (int b = 0; b < 3; b++)
+            {
+                held[b] = Input.GetMouseButton(b);
+                down[b] = Input.GetMouseButtonDown(b);
+                up[b] = Input.GetMouseButtonUp(b);
+            }
+
+            if (StaticFloat(_unscaledTime) != unscaled) return Fail("unscaledTime");
+            if (StaticFloat(_time) != time) return Fail("time");
+            if (StaticFloat(_deltaTime) != dt) return Fail("deltaTime");
+            if (StaticFloat(_unscaledDeltaTime) != udt) return Fail("unscaledDeltaTime");
+            if (StaticFloat(_fixedDeltaTime) != fdt) return Fail("fixedDeltaTime");
+            if (((delegate* unmanaged[Cdecl]<IntPtr, int>)_frameCount.Ptr)(_frameCount.Info) != frame) return Fail("frameCount");
+
+            float rtDirect = StaticFloat(_realtime);
+            if (rtDirect < rt || rtDirect - rt > 0.5f) return Fail("realtimeSinceStartup");
+
+            Vector3 m = ((delegate* unmanaged[Cdecl]<IntPtr, Vector3>)_mousePosition.Ptr)(_mousePosition.Info);
+            if (m.x != mouse.x || m.y != mouse.y || m.z != mouse.z) return Fail("mousePosition");
+            Vector2 sc = ((delegate* unmanaged[Cdecl]<IntPtr, Vector2>)_mouseScroll.Ptr)(_mouseScroll.Info);
+            if (sc.x != scroll.x || sc.y != scroll.y) return Fail("mouseScrollDelta");
+
+            for (int b = 0; b < 3; b++)
+            {
+                if (StaticIntBool(_mouseButton, b) != held[b]) return Fail("GetMouseButton");
+                if (StaticIntBool(_mouseButtonDown, b) != down[b]) return Fail("GetMouseButtonDown");
+                if (StaticIntBool(_mouseButtonUp, b) != up[b]) return Fail("GetMouseButtonUp");
+            }
+        }
+        catch (Exception e) { return Fail(e.GetType().Name); }
+
+        _clockState = 1;
+        return true;
+
+        static bool Fail(string what)
+        {
+            Logger.Warn($"direct clock/input calls disabled ({what})", Tag);
+            return false;
+        }
+    }
+
+    // ---- DestroyableSingleton<T>.InstanceExists ----
+    // InstanceExists は静的フィールドを読んで生存確認するだけの静的メソッドで、ラッパー経由だと 1 回ごとに箱が出る。
+    // 型ごとに別の MethodInfo (共有コードに型の情報を渡す) なので、T ごとに解決して握る。
+    // Instance の方は無い時に空の物を作るので、ここでは扱わない。
+
+    /// <summary>DestroyableSingleton&lt;T&gt;.InstanceExists と同じ。</summary>
+    public static bool Exists<T>() where T : MonoBehaviour
+    {
+        if (!Enabled) return DestroyableSingleton<T>.InstanceExists;
+
+        ref SingletonSlot slot = ref SingletonSlot<T>.Slot;
+        if (slot.State == 0) slot.Resolve<T>();
+        if (slot.State != 1) return DestroyableSingleton<T>.InstanceExists;
+
+        bool v = ((delegate* unmanaged[Cdecl]<IntPtr, byte>)slot.M.Ptr)(slot.M.Info) != 0;
+
+        if (slot.Checks < InstanceCheckCount)
+        {
+            slot.Checks++;
+            bool wrapped = DestroyableSingleton<T>.InstanceExists;
+
+            if (v != wrapped)
+            {
+                slot.State = 2;
+                Logger.Warn($"direct InstanceExists<{typeof(T).Name}> disabled (disagrees with the wrapper)", Tag);
+                return wrapped;
+            }
+        }
+
+        return v;
+    }
+
+    private struct SingletonSlot
+    {
+        public Method M;
+        public int State; // 0 = 未解決 / 1 = 使える / 2 = 使えない
+        public int Checks;
+
+        public void Resolve<T>() where T : MonoBehaviour
+        {
+            M = Il2Direct.Resolve<DestroyableSingleton<T>>("get_InstanceExists", 0);
+            State = M.Ok ? 1 : 2;
+        }
+    }
+
+    private static class SingletonSlot<T> where T : MonoBehaviour
+    {
+        public static SingletonSlot Slot;
+    }
+
+    // ---- 生きている物に対する、非仮想のインスタンスの読み取り ----
+    // 呼ぶ直前にその物自体が生きているかを確かめ、破棄済み (や null) ならラッパー経路へ落とす (例外の出方を従来どおりに保つ)。
+    // 仮想メソッドは解決の段階で弾く。最初の数十回はラッパー経路と突き合わせ、食い違えばそのメソッドだけ以後ラッパー経路。
+
+    private const int InstanceCheckCount = 32;
+
+    private sealed class Reader
+    {
+        public readonly string Name;
+        private readonly Func<Method> _resolve;
+        public Method M;
+        public int State; // 0 = 未解決 / 1 = 使える / 2 = 使えない
+        public int Checks;
+
+        public Reader(string name, Func<Method> resolve)
+        {
+            Name = name;
+            _resolve = resolve;
+        }
+
+        public bool Ready()
+        {
+            if (State != 0) return State == 1;
+
+            M = _resolve();
+            State = M.Ok && !IsVirtual(M.Info) ? 1 : 2;
+            if (State == 2) Logger.Warn($"direct {Name} unavailable", Tag);
+            return State == 1;
+        }
+
+        // 最初の数回だけ呼ばれる。食い違えば以後ずっとラッパー経路
+        public bool Agrees(bool same)
+        {
+            Checks++;
+            if (same) return true;
+
+            State = 2;
+            Logger.Warn($"direct {Name} disabled (disagrees with the wrapper)", Tag);
+            return false;
+        }
+    }
+
+    private static bool IsVirtual(IntPtr info)
+    {
+        uint iflags = 0;
+        return (IL2CPP.il2cpp_method_get_flags(info, ref iflags) & 0x0040) != 0; // METHOD_ATTRIBUTE_VIRTUAL
+    }
+
+    private static readonly Reader RPosition = new("Transform.position", static () => Resolve<Transform>("get_position", 0));
+    private static readonly Reader ROrtho = new("Camera.orthographicSize", static () => Resolve<Camera>("get_orthographicSize", 0));
+    private static readonly Reader RActiveSelf = new("GameObject.activeSelf", static () => Resolve<GameObject>("get_activeSelf", 0));
+    private static readonly Reader RActiveAndEnabled = new("Behaviour.isActiveAndEnabled", static () => Resolve<Behaviour>("get_isActiveAndEnabled", 0));
+    private static readonly Reader RColliderBounds = new("Collider2D.bounds", static () => Resolve<Collider2D>("get_bounds", 0));
+    private static readonly Reader RSpriteBounds = new("Sprite.bounds", static () => Resolve<Sprite>("get_bounds", 0));
+    private static readonly Reader RAmHost = new("InnerNetClient.AmHost", static () => Resolve<InnerNet.InnerNetClient>("get_AmHost", 0));
+    private static readonly Reader RIsGameStarted = new("InnerNetClient.IsGameStarted", static () => Resolve<InnerNet.InnerNetClient>("get_IsGameStarted", 0));
+    private static readonly Reader RIsGamePublic = new("InnerNetClient.IsGamePublic", static () => Resolve<InnerNet.InnerNetClient>("get_IsGamePublic", 0));
+    private static readonly Reader RAmOwner = new("InnerNetObject.AmOwner", static () => Resolve<InnerNet.InnerNetObject>("get_AmOwner", 0));
+    private static readonly Reader REventType = new("Event.type", static () => Resolve<Event>("get_type", 0));
+
+    private static bool Usable(UnityEngine.Object o, Reader r) => Enabled && Alive(o) && r.Ready();
+
+    public static Vector3 Position(Transform t)
+    {
+        if (!Usable(t, RPosition)) return t.position;
+        Vector3 v = V3(RPosition.M, t.Pointer);
+        return RPosition.Checks >= InstanceCheckCount || RPosition.Agrees(v == t.position) ? v : t.position;
+    }
+
+    public static float OrthographicSize(Camera c)
+    {
+        if (!Usable(c, ROrtho)) return c.orthographicSize;
+        float v = Float(ROrtho.M, c.Pointer);
+        return ROrtho.Checks >= InstanceCheckCount || ROrtho.Agrees(v == c.orthographicSize) ? v : c.orthographicSize;
+    }
+
+    public static bool ActiveSelf(GameObject go) => ReadBool(go, RActiveSelf, static o => o.activeSelf);
+    public static bool IsActiveAndEnabled(Behaviour b) => ReadBool(b, RActiveAndEnabled, static o => o.isActiveAndEnabled);
+    public static bool AmHost(InnerNet.InnerNetClient c) => ReadBool(c, RAmHost, static o => o.AmHost);
+    public static bool IsGameStarted(InnerNet.InnerNetClient c) => ReadBool(c, RIsGameStarted, static o => o.IsGameStarted);
+    public static bool IsGamePublic(InnerNet.InnerNetClient c) => ReadBool(c, RIsGamePublic, static o => o.IsGamePublic);
+    // AmOwner は中で AmongUsClient.Instance を読むので、それが無い瞬間 (切断の途中など) はラッパー経路で例外を受ける
+    public static bool AmOwner(InnerNet.InnerNetObject o) => Alive(AmongUsClient.Instance) ? ReadBool(o, RAmOwner, static x => x.AmOwner) : o.AmOwner;
+
+    public static Bounds ColliderBounds(Collider2D c) => ReadBounds(c, RColliderBounds, static o => o.bounds);
+    public static Bounds SpriteBounds(Sprite s) => ReadBounds(s, RSpriteBounds, static o => o.bounds);
+
+    private static bool ReadBool<T>(T o, Reader r, Func<T, bool> wrapped) where T : UnityEngine.Object
+    {
+        if (!Usable(o, r)) return wrapped(o);
+        bool v = Bool(r.M, o.Pointer);
+        return r.Checks >= InstanceCheckCount || r.Agrees(v == wrapped(o)) ? v : wrapped(o);
+    }
+
+    private static Bounds ReadBounds<T>(T o, Reader r, Func<T, Bounds> wrapped) where T : UnityEngine.Object
+    {
+        if (!Usable(o, r)) return wrapped(o);
+        Bounds v = ((delegate* unmanaged[Cdecl]<IntPtr, IntPtr, Bounds>)r.M.Ptr)(o.Pointer, r.M.Info);
+        if (r.Checks >= InstanceCheckCount) return v;
+        Bounds w = wrapped(o);
+        return r.Agrees(v.m_Center == w.m_Center && v.m_Extents == w.m_Extents) ? v : w;
+    }
+
+    /// <summary>Event.type と同じ。Event は UnityEngine.Object ではないので、ネイティブ側の実体 (m_Ptr) があるかで判定する。</summary>
+    public static EventType EventTypeOf(Event e)
+    {
+        if (!Enabled || e is null || e.m_Ptr == IntPtr.Zero || !REventType.Ready()) return e.type;
+        var v = (EventType)Int(REventType.M, e.Pointer);
+        return REventType.Checks >= InstanceCheckCount || REventType.Agrees(v == e.type) ? v : e.type;
+    }
+
+    // ---- 構造体のメンバ (interop のラッパーは this を箱に詰めてゲーム側へ渡すので、フィールドから自分で計算する) ----
+
+    public static float Width(in Rect r) => r.m_Width;
+    public static float Height(in Rect r) => r.m_Height;
+    public static float XMin(in Rect r) => r.m_XMin;
+    public static float YMin(in Rect r) => r.m_YMin;
+    public static float XMax(in Rect r) => r.m_XMin + r.m_Width;
+    public static float YMax(in Rect r) => r.m_YMin + r.m_Height;
+
+    /// <summary>Rect.Contains(Vector2) と同じ (幅・高さが負の Rect は何も含まない点も同じ)。</summary>
+    public static bool Contains(in Rect r, Vector2 p) => p.x >= r.m_XMin && p.x < r.m_XMin + r.m_Width && p.y >= r.m_YMin && p.y < r.m_YMin + r.m_Height;
 
     private static int ResolveCachedPtrOffset()
     {

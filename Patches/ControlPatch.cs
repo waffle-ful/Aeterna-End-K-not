@@ -44,7 +44,7 @@ internal static class ControllerManagerUpdatePatch
             // バグ報告の欄に打っている文字をホットキーとして拾わない
             if (BugReport.IsOpen) return;
 
-            if (HudManager.InstanceExists)
+            if (Il2Direct.Exists<HudManager>())
             {
                 if (Il2Direct.Alive(PlayerControl.LocalPlayer) && Il2Direct.Alive(PlayerControl.LocalPlayer.Collider))
                 {
@@ -129,10 +129,10 @@ internal static class ControllerManagerUpdatePatch
                 Utils.CopyCurrentSettings();
 
             // エアシップの破損演出を今すぐ起こす。自分の画面の描き分けだけなので、ホストでなくても使える。
-            if (KeysDown(KeyCode.LeftControl, KeyCode.LeftShift, KeyCode.G) && GameStates.IsInGame && HudManager.InstanceExists && !HudManager.Instance.Chat.IsOpenOrOpening)
+            if (KeysDown(KeyCode.LeftControl, KeyCode.LeftShift, KeyCode.G) && GameStates.IsInGame && Il2Direct.Exists<HudManager>() && !HudManager.Instance.Chat.IsOpenOrOpening)
                 EndKnot.Modules.MapAtmosphere.AirshipLiminal.DebugTrigger(-1);
 
-            if (!AmongUsClient.Instance.AmHost) return;
+            if (!Il2Direct.AmHost(AmongUsClient.Instance)) return;
 
             if (KeysDown(KeyCode.Return, KeyCode.C, KeyCode.LeftShift))
                 HudManager.Instance.Chat.SetVisible(true);
@@ -169,7 +169,7 @@ internal static class ControllerManagerUpdatePatch
                 Logger.SendInGame(GetString("CancelStartCountDown"));
             }
 
-            if (Il2Direct.GetKeyDown(KeyCode.Return) && GameStates.IsLobby && GameStartManager.InstanceExists && Options.EnterKeyToStartGame.GetBool() && GameStartManager.Instance.startState == GameStartManager.StartingStates.NotStarting && !HudManager.Instance.Chat.IsOpenOrOpening && !OnGameJoinedPatch.JoiningGame && !GameSettingMenu.Instance)
+            if (Il2Direct.GetKeyDown(KeyCode.Return) && GameStates.IsLobby && Il2Direct.Exists<GameStartManager>() && Options.EnterKeyToStartGame.GetBool() && GameStartManager.Instance.startState == GameStartManager.StartingStates.NotStarting && !HudManager.Instance.Chat.IsOpenOrOpening && !OnGameJoinedPatch.JoiningGame && !GameSettingMenu.Instance)
             {
                 Logger.Info("ENTER pressed: Starting game by host", "KeyCommand");
                 GameStartManager.Instance.BeginGame();
@@ -187,7 +187,7 @@ internal static class ControllerManagerUpdatePatch
                 Utils.ShowActiveSettings();
             }
 
-            if (GameStates.IsLobby && HudManager.InstanceExists && KeysDown(KeyCode.Delete, KeyCode.LeftControl, KeyCode.LeftShift) && !IsResetting)
+            if (GameStates.IsLobby && Il2Direct.Exists<HudManager>() && KeysDown(KeyCode.Delete, KeyCode.LeftControl, KeyCode.LeftShift) && !IsResetting)
             {
                 Prompt.Show(GetString("Promt.ResetAllOptions"), ResetAllOptions, () => { });
 
@@ -257,7 +257,7 @@ internal static class ControllerManagerUpdatePatch
                 if (Constants.ShouldPlaySfx()) RPC.PlaySound(PlayerControl.LocalPlayer.PlayerId, Sounds.KillSound);
             }
 
-            if (KeysDown(KeyCode.Return, KeyCode.G, KeyCode.LeftShift) && GameStates.IsInGame && HudManager.InstanceExists)
+            if (KeysDown(KeyCode.Return, KeyCode.G, KeyCode.LeftShift) && GameStates.IsInGame && Il2Direct.Exists<HudManager>())
             {
                 HudManager.Instance.StartCoroutine(HudManager.Instance.CoFadeFullScreen(Color.clear, Color.black));
                 HudManager.Instance.StartCoroutine(HudManager.Instance.CoShowIntro());
@@ -290,7 +290,7 @@ internal static class ControllerManagerUpdatePatch
                 Logger.SendInGame(GetString("SyncCustomSettingsRPC"));
             }
 
-            if (Il2Direct.GetKeyDown(KeyCode.Equals) && !GameStates.IsMeeting && HudManager.InstanceExists && !HudManager.Instance.Chat.IsOpenOrOpening)
+            if (Il2Direct.GetKeyDown(KeyCode.Equals) && !GameStates.IsMeeting && Il2Direct.Exists<HudManager>() && !HudManager.Instance.Chat.IsOpenOrOpening)
             {
                 Main.VisibleTasksCount = !Main.VisibleTasksCount;
                 HudManager.Instance.Notifier.AddDisconnectMessage($"VisibleTaskCount changed to {Main.VisibleTasksCount}.");
@@ -467,7 +467,7 @@ public static class InGameRoleInfoMenu
 
     private static GameObject MainInfo;
     private static GameObject AddonsInfo;
-    public static bool Showing => Fill && Fill.active && Menu && Menu.active;
+    public static bool Showing => Il2Direct.Alive(Fill) && Fill.active && Il2Direct.Alive(Menu) && Menu.active;
     private static SpriteRenderer FillSp => Fill.GetComponent<SpriteRenderer>();
     private static TextMeshPro MainInfoTMP => MainInfo.GetComponent<TextMeshPro>();
     private static TextMeshPro AddonsInfoTMP => AddonsInfo.GetComponent<TextMeshPro>();

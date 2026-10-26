@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using AmongUs.GameOptions;
 using EndKnot.Gamemodes;
+using EndKnot.Modules;
 using EndKnot.Patches;
 using EndKnot.Roles;
 using TMPro;
@@ -79,11 +80,11 @@ public static class HudSpritePatch
         try
         {
             PlayerControl player = PlayerControl.LocalPlayer;
-            if (!player) return;
+            if (!Il2Direct.Alive(player)) return;
 
-            if (!Main.EnableCustomButton.Value || !Main.ProcessShapeshifts || Mastermind.ManipulatedPlayers.ContainsKey(player.PlayerId) || ExileController.Instance || GameStates.IsMeeting) return;
+            if (!Main.EnableCustomButton.Value || !Main.ProcessShapeshifts || Mastermind.ManipulatedPlayers.ContainsKey(player.PlayerId) || Il2Direct.Alive(ExileController.Instance) || GameStates.IsMeeting) return;
             if ((!SetHudActivePatch.IsActive && !MeetingStates.FirstMeeting) || !player.IsAlive()) return;
-            if (!AmongUsClient.Instance.IsGameStarted || !Main.IntroDestroyed || GameStates.IsLobby || GameStates.IsNotJoined || !GameStates.InGame || IntroCutsceneDestroyPatch.PreventKill) return;
+            if (!Il2Direct.IsGameStarted(AmongUsClient.Instance) || !Main.IntroDestroyed || GameStates.IsLobby || GameStates.IsNotJoined || !GameStates.InGame || IntroCutsceneDestroyPatch.PreventKill) return;
 
             if (DefaultIcons.Length == 0) return;
 

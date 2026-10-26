@@ -8,6 +8,7 @@ using HarmonyLib;
 using Hazel;
 using InnerNet;
 using UnityEngine;
+using EndKnot.Modules;
 
 namespace EndKnot;
 
@@ -121,7 +122,7 @@ internal static class ChatControllerUpdatePatch
 
     public static void PrefixCore()
     {
-        if (!AllowQuickChatOnly && AmongUsClient.Instance.AmHost && DataManager.Settings.Multiplayer.ChatMode == QuickChatModes.QuickChatOnly)
+        if (!AllowQuickChatOnly && Il2Direct.AmHost(AmongUsClient.Instance) && DataManager.Settings.Multiplayer.ChatMode == QuickChatModes.QuickChatOnly)
             DataManager.Settings.Multiplayer.ChatMode = QuickChatModes.FreeChatOrQuickChat;
     }
 
@@ -172,27 +173,27 @@ internal static class ChatControllerUpdatePatch
 
         __instance.freeChatField.textArea.characterLimit = 1000;
 
-        if (Input.GetKeyDown(KeyCode.Tab)) TextBoxPatch.OnTabPress(__instance);
+        if (Il2Direct.GetKeyDown(KeyCode.Tab)) TextBoxPatch.OnTabPress(__instance);
 
-        if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.C))
+        if ((Il2Direct.GetKey(KeyCode.LeftControl) || Il2Direct.GetKey(KeyCode.RightControl)) && Il2Direct.GetKeyDown(KeyCode.C))
             ClipboardHelper.PutClipboardString(TextBoxPatch.SafeChatText(__instance.freeChatField.textArea));
 
-        if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.V))
+        if ((Il2Direct.GetKey(KeyCode.LeftControl) || Il2Direct.GetKey(KeyCode.RightControl)) && Il2Direct.GetKeyDown(KeyCode.V))
             HandleChatPaste(__instance);
 
-        if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.X))
+        if ((Il2Direct.GetKey(KeyCode.LeftControl) || Il2Direct.GetKey(KeyCode.RightControl)) && Il2Direct.GetKeyDown(KeyCode.X))
         {
             ClipboardHelper.PutClipboardString(TextBoxPatch.SafeChatText(__instance.freeChatField.textArea));
             TextBoxPatch.SetChatFieldText(__instance.freeChatField.textArea, "");
         }
 
-        if (Input.GetKeyDown(KeyCode.UpArrow) && ChatCommands.ChatHistory.Count > 0)
+        if (Il2Direct.GetKeyDown(KeyCode.UpArrow) && ChatCommands.ChatHistory.Count > 0)
         {
             CurrentHistorySelection = Mathf.Clamp(--CurrentHistorySelection, 0, ChatCommands.ChatHistory.Count - 1);
             TextBoxPatch.SetChatFieldText(__instance.freeChatField.textArea, ChatCommands.ChatHistory[CurrentHistorySelection]);
         }
 
-        if (Input.GetKeyDown(KeyCode.DownArrow) && ChatCommands.ChatHistory.Count > 0)
+        if (Il2Direct.GetKeyDown(KeyCode.DownArrow) && ChatCommands.ChatHistory.Count > 0)
         {
             CurrentHistorySelection++;
             TextBoxPatch.SetChatFieldText(__instance.freeChatField.textArea, CurrentHistorySelection < ChatCommands.ChatHistory.Count ? ChatCommands.ChatHistory[CurrentHistorySelection] : string.Empty);

@@ -828,7 +828,7 @@ public static partial class ExplosionFx
                 _fuseUntil = 0f;
                 HidePortalWindows();
             }
-            else if (!ExileController.Instance)
+            else if (!Il2Direct.Alive(ExileController.Instance))
             {
                 if (_awakenId >= 0 && GameStates.IsInTask) TryAwakenBurst();
                 if (SnareEmitters.Count > 0) PulseSnares();

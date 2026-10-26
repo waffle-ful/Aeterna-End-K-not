@@ -64,7 +64,7 @@ public class ImguiHost : MonoBehaviour
     // ModManager.LateUpdate (全シーンで毎フレーム) から呼ぶ。
     public static void Tick()
     {
-        float now = Time.unscaledTime;
+        float now = Il2Direct.UnscaledTime;
         if (now < _nextPoll) return;
         _nextPoll = now + PollSeconds;
         Refresh();

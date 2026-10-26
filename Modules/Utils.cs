@@ -5224,7 +5224,7 @@ public static class Utils
 
         int bc = t.Sum(c => Encoding.GetEncoding("UTF-8").GetByteCount(c.ToString()) == 1 ? 1 : 2);
 
-        return t.PadRight(Mathf.Max(num - (bc - t.Length), 0));
+        return t.PadRight(Math.Max(num - (bc - t.Length), 0));
     }
 
     public static void DumpLog(bool open = true, bool finish = true, bool moveHtml = false)

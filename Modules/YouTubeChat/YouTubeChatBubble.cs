@@ -80,8 +80,8 @@ public class YouTubeChatBubble : MonoBehaviour
 
     private static bool ShouldShow()
     {
-        if (!HudManager.InstanceExists) return false;
-        if (!Il2Direct.Alive(AmongUsClient.Instance) || !AmongUsClient.Instance.AmHost) return false;
+        if (!Il2Direct.Exists<HudManager>()) return false;
+        if (!Il2Direct.Alive(AmongUsClient.Instance) || !Il2Direct.AmHost(AmongUsClient.Instance)) return false;
         if (YouTubeChatOptions.Enabled == null || !YouTubeChatOptions.Enabled.GetBool()) return false;
         if (YouTubeChatOptions.HideDuringMeetings != null && YouTubeChatOptions.HideDuringMeetings.GetBool() && GameStates.IsMeeting) return false;
         return true;
@@ -94,7 +94,7 @@ public class YouTubeChatBubble : MonoBehaviour
         {
             if (!ShouldShow()) return;
             YouTubeChatOverlay.EnsureSubscribed();
-            if ((Time.frameCount % 30) == 0) MeasureStartButton();
+            if ((Il2Direct.FrameCount % 30) == 0) MeasureStartButton();
 
             bool typing = Il2Direct.Alive(HudManager.Instance.Chat) && HudManager.Instance.Chat.IsOpenOrOpening;
             if (typing) return;
@@ -147,7 +147,7 @@ public class YouTubeChatBubble : MonoBehaviour
     private void HandlePanelInput()
     {
         Event e = Event.current;
-        EventType type = e.type;
+        EventType type = Il2Direct.EventTypeOf(e);
         if (type is not (EventType.MouseDown or EventType.MouseUp)) return;
 
         Vector2 mouse = e.mousePosition;
@@ -254,26 +254,26 @@ public class YouTubeChatBubble : MonoBehaviour
 
     private void DrawPanel()
     {
-        if (_panelRect.width <= 0f) return;
+        if (Il2Direct.Width(_panelRect) <= 0f) return;
 
         float pad = PanelPad;
         GUI.Box(_panelRect, GUIContent.none, _panelBg);
         GUI.Label(_titleRect, _titleContent, _titleStyle);
         Event ev = Event.current;
-        if (ev.type == EventType.Repaint) _closeState.background = _closeRect.Contains(ev.mousePosition) ? _closeHoverTex : _closeTex;
+        if (Il2Direct.EventTypeOf(ev) == EventType.Repaint) _closeState.background = Il2Direct.Contains(_closeRect, ev.mousePosition) ? _closeHoverTex : _closeTex;
         GUI.Box(_closeRect, _closeContent, _closeStyle);
         GUI.Box(_lineRect, GUIContent.none, _lineStyle);
 
-        float top = _panelRect.y + pad + HeaderHeight;
-        var outerRect = new Rect(_panelRect.x + pad, top, _panelRect.width - pad * 2f, _panelRect.yMax - pad - top);
-        float contentW = Math.Max(1f, outerRect.width - ScrollbarColumnWidth - 4f * Scale);
+        float top = Il2Direct.YMin(_panelRect) + pad + HeaderHeight;
+        var outerRect = new Rect(Il2Direct.XMin(_panelRect) + pad, top, Il2Direct.Width(_panelRect) - pad * 2f, Il2Direct.YMax(_panelRect) - pad - top);
+        float contentW = Math.Max(1f, Il2Direct.Width(outerRect) - ScrollbarColumnWidth - 4f * Scale);
 
         string body = BuildBody();
         float measuredH = _textStyle.CalcHeight(new GUIContent(body), contentW);
         _contentH = measuredH;
 
         var innerRect = new Rect(0, 0, contentW, _contentH);
-        float maxScroll = Math.Max(0f, _contentH - outerRect.height);
+        float maxScroll = Math.Max(0f, _contentH - Il2Direct.Height(outerRect));
 
         // スクロールバーは本編の板の縁と同じ灰の細いつまみだけにする (溝は透明)。skin は他の画面と共有なので描き終えたら戻す
         // 参照と元の絵は EnsureStyles で 1 回だけ取る (取るたびに包みができ、OnGUI は 1 フレームに何度も呼ばれる)

@@ -243,7 +243,7 @@ public static class PacketRateGate
         try
         {
             var instance = AmongUsClient.Instance;
-            if (instance == null) return;
+            if (!Il2Direct.Alive(instance)) return;
 
             DetectReconnect(instance);
             SampleLinkHealth();

@@ -29,7 +29,7 @@ public static class ObjectHelper
         int pathIndex = pathParts.Length - 1;
         Transform current = obj.transform;
 
-        while (current)
+        while (Modules.Il2Direct.Alive(current))
         {
             if (current.name == pathParts[pathIndex])
             {

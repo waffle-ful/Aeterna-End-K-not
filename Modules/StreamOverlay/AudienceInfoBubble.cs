@@ -50,8 +50,8 @@ public class AudienceInfoBubble : MonoBehaviour
 
     private static bool ShouldShow()
     {
-        if (!HudManager.InstanceExists) return false;
-        if (!Il2Direct.Alive(AmongUsClient.Instance) || !AmongUsClient.Instance.AmHost) return false;
+        if (!Il2Direct.Exists<HudManager>()) return false;
+        if (!Il2Direct.Alive(AmongUsClient.Instance) || !Il2Direct.AmHost(AmongUsClient.Instance)) return false;
         if (AudienceOptions.Enabled == null || !AudienceOptions.Enabled.GetBool()) return false;
         if (AudienceOptions.ShowInfoOverlay == null || !AudienceOptions.ShowInfoOverlay.GetBool()) return false;
         // ロビー(予告)とゲーム中(干渉が効く)の両方で表示。会議中も表示したままにする。
@@ -99,7 +99,7 @@ public class AudienceInfoBubble : MonoBehaviour
     // インデックスが変わったときだけ。これで毎 OnGUI での List/文字列生成をゼロにする。
     private void UpdateSlide()
     {
-        int tick = (int)(Time.realtimeSinceStartup / RotateSeconds);
+        int tick = (int)(Il2Direct.RealtimeSinceStartup / RotateSeconds);
         if (tick != _lastTick || _cachedSlides == null)
         {
             _lastTick = tick;
@@ -156,7 +156,7 @@ public class AudienceInfoBubble : MonoBehaviour
     private void HandleDrag()
     {
         Event e = Event.current;
-        switch (e.type)
+        switch (Il2Direct.EventTypeOf(e))
         {
             case EventType.MouseDown when BubbleRect.Contains(e.mousePosition):
                 _dragging = true;

@@ -22,8 +22,8 @@ internal sealed class EkSpawnEditorHost : ISpawnEditorHost
     {
         get
         {
-            if (!AmongUsClient.Instance || !GameStates.IsFreePlay) return -1;
-            if (!ShipStatus.Instance || !PlayerControl.LocalPlayer) return -1;
+            if (!Il2Direct.Alive(AmongUsClient.Instance) || !GameStates.IsFreePlay) return -1;
+            if (!Il2Direct.Alive(ShipStatus.Instance) || !Il2Direct.Alive(PlayerControl.LocalPlayer)) return -1;
             return EkSpawnEditor.ToStorageMapId(AmongUsClient.Instance.TutorialMapId);
         }
     }

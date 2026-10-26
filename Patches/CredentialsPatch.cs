@@ -130,7 +130,7 @@ internal static class PingTrackerUpdatePatch
         public static void TickFrame()
         {
             Frames++;
-            Elapsed += Time.unscaledDeltaTime;
+            Elapsed += EndKnot.Modules.Il2Direct.UnscaledDeltaTime;
             if (Elapsed < SampleInterval) return;
             float fps = Frames / Elapsed;
             FpsBuffer[FpsIndex] = fps;
@@ -547,7 +547,7 @@ internal static class ModManagerLateUpdatePatch
     {
         if (EndKnot.Modules.Il2Direct.Alive(__instance.localCamera))
         {
-            float offsetY = HudManager.InstanceExists ? 1.1f : 0.9f;
+            float offsetY = EndKnot.Modules.Il2Direct.Exists<HudManager>() ? 1.1f : 0.9f;
 
             __instance.ModStamp.transform.position = AspectPosition.ComputeWorldPosition(
                 __instance.localCamera, AspectPosition.EdgeAlignments.RightTop,
@@ -555,7 +555,7 @@ internal static class ModManagerLateUpdatePatch
         }
         else
         {
-            __instance.localCamera = !HudManager.InstanceExists
+            __instance.localCamera = !EndKnot.Modules.Il2Direct.Exists<HudManager>()
                 ? Camera.main
                 : HudManager.Instance.GetComponentInChildren<Camera>();
         }

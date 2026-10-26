@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
+using EndKnot.Modules;
 
 namespace EndKnot;
 
@@ -23,7 +24,7 @@ public static class Zoom
     // FixedUpdateCaller.OnLateUpdate (全シーンで毎フレーム) から呼ぶ。
     public static void LatchScroll()
     {
-        float y = Input.mouseScrollDelta.y;
+        float y = Il2Direct.MouseScrollDelta.y;
         if (y == 0f) return;
         PendingScroll += y;
         PendingScrollFrame = Time.frameCount;

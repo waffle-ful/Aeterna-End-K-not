@@ -64,7 +64,7 @@ public static class CompanionEventEmitter
         EnsureChatSubscribed();
 
         if (!Enabled) return;
-        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return;
+        if (!Il2Direct.Alive(AmongUsClient.Instance) || !Il2Direct.AmHost(AmongUsClient.Instance)) return;
 
         TickPhase();
         TickLobbyDemo();
