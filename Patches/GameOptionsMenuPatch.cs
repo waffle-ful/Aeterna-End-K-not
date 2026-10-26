@@ -1277,6 +1277,10 @@ public static class StringOptionPatch
     // (upstream #637 "Use NameCache to update name of StringOption").
     internal static readonly Dictionary<StringOption, string> NameCache = new();
 
+    // コンビの主役職の行はペア名 (「ドライバーとブレイド」) に置き換わっているので、それも役職行として扱う
+    private static bool IsRoleTitle(CustomRoles role, string plainName) =>
+        Translator.GetString($"{role}") == plainName || (role.IsCombinationPrimary() && role.GetCombinationName(false) == plainName);
+
     private static bool IsVanillaServer => GameStates.CurrentServerType == GameStates.ServerType.Vanilla;
 
     private static void ClampOfficialStringOption(StringOption option)
@@ -1305,7 +1309,7 @@ public static class StringOptionPatch
             item.OptionBehaviour = __instance;
             string name1 = name;
 
-            if (Main.CustomRoleValues.FindFirst(x => Translator.GetString($"{x}") == name1.RemoveHtmlTags(), out CustomRoles role))
+            if (Main.CustomRoleValues.FindFirst(x => IsRoleTitle(x, name1.RemoveHtmlTags()), out CustomRoles role))
             {
                 if (role.ToString().Contains("GuardianAngel")) role = CustomRoles.GA;
 
@@ -1390,7 +1394,7 @@ public static class StringOptionPatch
                 OptionItem item = OptionItem.AllOptions[index];
                 string name = item.GetName();
 
-                if (Main.CustomRoleValues.FindFirst(x => Translator.GetString($"{x}") == name.RemoveHtmlTags(), out CustomRoles value))
+                if (Main.CustomRoleValues.FindFirst(x => IsRoleTitle(x, name.RemoveHtmlTags()), out CustomRoles value))
                 {
                     string roleName = value.IsVanilla() ? value + "EndKnot" : value.ToString();
                     string str = Translator.GetString($"{roleName}InfoLong").FixRoleName(value);
@@ -1449,7 +1453,7 @@ public static class StringOptionPatch
 
             string name1 = name;
 
-            if (Main.CustomRoleValues.FindFirst(x => Translator.GetString($"{x}") == name1.RemoveHtmlTags(), out CustomRoles role))
+            if (Main.CustomRoleValues.FindFirst(x => IsRoleTitle(x, name1.RemoveHtmlTags()), out CustomRoles role))
             {
                 if (role.ToString().Contains("GuardianAngel")) role = CustomRoles.GA;
 
