@@ -508,8 +508,10 @@ internal static class HudManagerPatch
 
                     // 役職メーカーの役職は canSabotage (省略時は陣営どおり) に従う — 基底を借りているだけの
                     // クルー/第三陣営が、基底の RoleTypes だけを根拠にサボを持たないようにする。
+                    // 普通のクルー役職も、ファントム/シェイプシフター基底を借りているだけで実際にサボできない時は出さない。
                     sabotageButton?.ToggleVisible(player.GetRoleTypes() is RoleTypes.ImpostorGhost or RoleTypes.Impostor or RoleTypes.Phantom or RoleTypes.Shapeshifter or RoleTypes.Viper
-                                                  && EndKnot.Modules.Ekm.EkrManager.AllowsSabotage(player.GetCustomRole()));
+                                                  && EndKnot.Modules.Ekm.EkrManager.AllowsSabotage(player.GetCustomRole())
+                                                  && !(player.IsCrewmate() && !player.CanUseSabotage()));
 
                     AllocProbe.Mark("hud.b3.sab", sub);
                     alloc = AllocProbe.Mark("hud.b3", alloc);
@@ -904,7 +906,8 @@ internal static class SetHudActivePatch
 
         __instance.KillButton?.ToggleVisible(player.CanUseKillButton());
         __instance.ImpostorVentButton?.ToggleVisible(player.CanUseImpostorVentButton());
-        __instance.SabotageButton?.ToggleVisible(player.GetRoleTypes() is RoleTypes.ImpostorGhost or RoleTypes.Impostor or RoleTypes.Phantom or RoleTypes.Shapeshifter or RoleTypes.Viper);
+        // ファントム/シェイプシフター基底のクルー役職は本編の型だけ見るとサボ持ちになるので、実際にサボできない時は出さない
+        __instance.SabotageButton?.ToggleVisible((player.GetRoleTypes() is RoleTypes.ImpostorGhost or RoleTypes.Impostor or RoleTypes.Phantom or RoleTypes.Shapeshifter or RoleTypes.Viper) && !(player.IsCrewmate() && !player.CanUseSabotage()));
 
         if (Options.UseMeetingShapeshift.GetBool() && PlayerControl.LocalPlayer.UsesMeetingShapeshift() && GameStates.IsMeeting)
         {
