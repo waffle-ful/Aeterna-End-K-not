@@ -1207,6 +1207,7 @@ public static class Utils
             // ⚠️ Phantom 基底のクルーはここに要る。上の `if (p.Role.IsImpostor) hasTasks = false;` は
             //    RoleTypes ベースの判定なので、desync で Phantom を持つクルーもタスクを消されてしまう。
             case CustomRoles.Mirage:
+            case CustomRoles.SheriffHadouHo:
                 hasTasks = true;
                 break;
             default:

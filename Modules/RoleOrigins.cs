@@ -434,6 +434,7 @@ public static class RoleOrigins
         [CustomRoles.Missioneer] = "TOHK",
         [CustomRoles.JackalHadouHo] = "SNR",
         [CustomRoles.Tama] = "SNR",
+        [CustomRoles.SheriffHadouHo] = "Pko",
         [CustomRoles.SantaClaus] = "NoS",
         [CustomRoles.MassMedia] = "TOHK",
         [CustomRoles.Augur] = "EHR",

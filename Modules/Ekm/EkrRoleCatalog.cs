@@ -149,6 +149,7 @@ internal static class EkrRoleCatalog
         ["Sentinel"] = "crewmate",
         ["Sentry"] = "crewmate",
         ["Sheriff"] = "crewmate",
+        ["SheriffHadouHo"] = "crewmate",
         ["Shiftguard"] = "crewmate",
         ["ShrineMaiden"] = "crewmate",
         ["Shyboy"] = "crewmate",

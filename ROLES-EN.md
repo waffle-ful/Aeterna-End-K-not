@@ -68,7 +68,7 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Atlas<br><sub>From:ExtremeRoles</sub> | Dominion<br><sub>From:TownOfUs, ExtremeRoles</sub> | Babel<br><sub>From:TownOfHost for E</sub> | Replay |
 | Nova<br><sub>From:UchuAddon</sub> |  |  |  |
 
-### Crewmate (179)
+### Crewmate (180)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -116,7 +116,7 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | WolfBoy<br><sub>From:TownOfHost-K</sub> | ForceFielder | Akazukin<br><sub>From:SuperNewRoles</sub> | Sandbox |
 | Operative<br><sub>From:EndlessHostRoles</sub> | Survivor<br><sub>From:EndlessHostRoles</sub> | Bouncer<br><sub>From:EndlessHostRoles</sub> | Gemini<br><sub>From:Project Lotus</sub> |
 | MapExtender<br><sub>From:TheOtherRoles</sub> | PortalButton | Revenant<br><sub>From:EndlessHostRoles</sub> | Crewmate |
-| Newscaster | Mirage<br><sub>From:NebulaontheShip</sub> | Evader<br><sub>From:EndlessHostRoles</sub> |  |
+| Newscaster | Mirage<br><sub>From:NebulaontheShip</sub> | Evader<br><sub>From:EndlessHostRoles</sub> | SheriffHadouHo<br><sub>From:TownOfHost-Pko</sub> |
 
 ### Neutral (141)
 
