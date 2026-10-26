@@ -1439,6 +1439,7 @@ internal static class MeetingHudStartPatch
         Retributionist.StartMeetingPatch.Postfix(__instance);
         Starspawn.StartMeetingPatch.Postfix(__instance);
         Ventriloquist.StartMeetingPatch.Postfix(__instance);
+        Exorcist.StartMeetingPatch.Postfix(__instance);
         Changeling.StartMeetingPatch.Postfix(__instance);
         Markseeker.StartMeetingPatch.Postfix(__instance);
         ShowHostMeetingPatch.Setup_Postfix(__instance);
