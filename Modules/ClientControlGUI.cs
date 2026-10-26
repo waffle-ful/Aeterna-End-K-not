@@ -370,7 +370,7 @@ public class ClientControlGUI : MonoBehaviour
         if (!_toggleGo.activeSelf) _toggleGo.SetActive(true);
 
         // 90% transparent during gameplay or while the settings menu is open, same as the IMGUI button was
-        float alpha = GameStates.IsInGame || GameSettingMenu.Instance ? 0.10f : 1f;
+        float alpha = GameStates.IsInGame || Il2Direct.Alive(GameSettingMenu.Instance) ? 0.10f : 1f;
 
         if (alpha != _toggleAlpha)
         {
@@ -407,7 +407,7 @@ public class ClientControlGUI : MonoBehaviour
 
     private static void EnsureToggle()
     {
-        int size = Mathf.Max(1, Mathf.RoundToInt(48f * Scale));
+        int size = Math.Max(1, (int)Math.Round(48f * Scale));
         if (size != _toggleTexSize || !Il2Direct.Alive(_spNormal)) BuildToggleSprites(size);
         if (Il2Direct.Alive(_toggleGo)) return;
 
@@ -435,9 +435,9 @@ public class ClientControlGUI : MonoBehaviour
     private static bool PlaceToggle()
     {
         Camera cam = HudManager.Instance.UICamera;
-        if (!cam) return false;
+        if (!Il2Direct.Alive(cam)) return false;
 
-        int sw = Screen.width, sh = Screen.height;
+        int sw = Il2Direct.ScreenWidth, sh = Il2Direct.ScreenHeight;
         float ortho = cam.orthographicSize;
         if (sw == _placedW && sh == _placedH && ortho == _placedOrtho) return true;
         _placedW = sw;

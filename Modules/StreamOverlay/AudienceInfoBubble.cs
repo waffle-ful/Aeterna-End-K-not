@@ -51,7 +51,7 @@ public class AudienceInfoBubble : MonoBehaviour
     private static bool ShouldShow()
     {
         if (!HudManager.InstanceExists) return false;
-        if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return false;
+        if (!Il2Direct.Alive(AmongUsClient.Instance) || !AmongUsClient.Instance.AmHost) return false;
         if (AudienceOptions.Enabled == null || !AudienceOptions.Enabled.GetBool()) return false;
         if (AudienceOptions.ShowInfoOverlay == null || !AudienceOptions.ShowInfoOverlay.GetBool()) return false;
         // ロビー(予告)とゲーム中(干渉が効く)の両方で表示。会議中も表示したままにする。

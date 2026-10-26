@@ -95,7 +95,7 @@ public static class HostInfoPanelSetUpPatch
     {
         try
         {
-            if (!HostText) HostText = __instance.content.transform.FindChild("Name").GetComponent<TextMeshPro>();
+            if (!Il2Direct.Alive(HostText)) HostText = __instance.content.transform.FindChild("Name").GetComponent<TextMeshPro>();
 
             int colorId = __instance.player.ColorId;
             float now = Time.unscaledTime;

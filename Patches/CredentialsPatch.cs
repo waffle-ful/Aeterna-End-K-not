@@ -545,7 +545,7 @@ internal static class ModManagerLateUpdatePatch
 
     public static void Postfix(ModManager __instance)
     {
-        if (__instance.localCamera)
+        if (EndKnot.Modules.Il2Direct.Alive(__instance.localCamera))
         {
             float offsetY = HudManager.InstanceExists ? 1.1f : 0.9f;
 

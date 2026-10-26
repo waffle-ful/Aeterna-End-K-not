@@ -96,10 +96,10 @@ public class YouTubeChatBubble : MonoBehaviour
             YouTubeChatOverlay.EnsureSubscribed();
             if ((Time.frameCount % 30) == 0) MeasureStartButton();
 
-            bool typing = HudManager.Instance.Chat != null && HudManager.Instance.Chat.IsOpenOrOpening;
+            bool typing = Il2Direct.Alive(HudManager.Instance.Chat) && HudManager.Instance.Chat.IsOpenOrOpening;
             if (typing) return;
 
-            if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.Y))
+            if ((Il2Direct.GetKey(KeyCode.LeftControl) || Il2Direct.GetKey(KeyCode.RightControl)) && Il2Direct.GetKeyDown(KeyCode.Y))
                 _isOpen = !_isOpen;
         }
         catch (Exception e) { Utils.ThrowException(e); }
@@ -147,7 +147,11 @@ public class YouTubeChatBubble : MonoBehaviour
     private void HandlePanelInput()
     {
         Event e = Event.current;
-        if (e.type == EventType.MouseDown && _closeRect.Contains(e.mousePosition))
+        EventType type = e.type;
+        if (type is not (EventType.MouseDown or EventType.MouseUp)) return;
+
+        Vector2 mouse = e.mousePosition;
+        if (type == EventType.MouseDown && _closeRect.Contains(mouse))
         {
             _isOpen = false;
             _panelRect = default;
@@ -155,7 +159,7 @@ public class YouTubeChatBubble : MonoBehaviour
             return;
         }
 
-        if (e.type is EventType.MouseDown or EventType.MouseUp && (_panelHitZone.Contains(e.mousePosition) || _closeRect.Contains(e.mousePosition))) e.Use();
+        if (_panelHitZone.Contains(mouse) || _closeRect.Contains(mouse)) e.Use();
     }
 
     // 閉じている間、板の左下の角に「開く」ボタンを出す
@@ -187,20 +191,22 @@ public class YouTubeChatBubble : MonoBehaviour
     private void ComputePanelGeometry()
     {
         float pad = PanelPad;
-        float lineH = _textStyle.lineHeight > 0f ? _textStyle.lineHeight : 20f * Scale;
+        float styleLineH = _textStyle.lineHeight;
+        float lineH = styleLineH > 0f ? styleLineH : 20f * Scale;
         float widthPct = (YouTubeChatOptions.PanelWidth?.GetInt() ?? 100) / 100f;
         float heightPct = (YouTubeChatOptions.PanelHeight?.GetInt() ?? 100) / 100f;
 
-        int visibleLines = Mathf.Max(1, Mathf.RoundToInt(BaseVisibleLines * heightPct));
+        int visibleLines = Math.Max(1, (int)Math.Round(BaseVisibleLines * heightPct));
         float ph = visibleLines * lineH + pad * 2f + HeaderHeight;
 
+        int screenW = Il2Direct.ScreenWidth, screenH = Il2Direct.ScreenHeight;
         float px, py, pw;
         if (AudienceSeats.TryGetHistoryAnchor(out float benchLeft, out float benchRight, out float bottom, out float width))
         {
             // 観客席の右隣で下端をそろえる。右に入らなければ左隣。幅は観客席と同じ (幅の設定は観客席を出していない時だけ効く)
             float gap = 10f * Scale;
             pw = width;
-            px = benchRight + gap + pw <= Screen.width ? benchRight + gap : benchLeft - gap - pw;
+            px = benchRight + gap + pw <= screenW ? benchRight + gap : benchLeft - gap - pw;
             py = bottom - ph;
         }
         else
@@ -208,26 +214,26 @@ public class YouTubeChatBubble : MonoBehaviour
             // 観客席が出ていない時は左端の中ほど
             pw = BasePanelWidth * Scale * widthPct;
             px = 14f * Scale;
-            py = Screen.height * 0.34f;
+            py = screenH * 0.34f;
         }
 
         // ロビーでは下の中央の「開始」ボタンに掛からないよう、右端をその手前で止める
         float startLeft = _startLeft;
         if (startLeft > 0f && px < startLeft && px + pw > startLeft - 8f * Scale)
-            pw = Mathf.Max(120f * Scale, startLeft - 8f * Scale - px);
+            pw = Math.Max(120f * Scale, startLeft - 8f * Scale - px);
 
-        px = Mathf.Clamp(px, 0f, Mathf.Max(0f, Screen.width - pw));
-        py = Mathf.Clamp(py, 0f, Mathf.Max(0f, Screen.height - ph));
+        px = Math.Clamp(px, 0f, Math.Max(0f, screenW - pw));
+        py = Math.Clamp(py, 0f, Math.Max(0f, screenH - ph));
 
         _panelRect = new Rect(px, py, pw, ph);
-        _panelHitZone = new Rect(px, py, Mathf.Max(0f, pw - ScrollbarColumnWidth - pad), ph);
+        _panelHitZone = new Rect(px, py, Math.Max(0f, pw - ScrollbarColumnWidth - pad), ph);
 
         // 見出しの段: 左に題、右端に ×、その下に区切り線
         float cs = 20f * Scale;
         float headerMid = py + pad + HeaderHeight / 2f - 2f * Scale;
         _closeRect = new Rect(px + pw - pad - cs, headerMid - cs / 2f, cs, cs);
         _titleRect = new Rect(px + pad + 2f * Scale, headerMid - cs / 2f, pw - pad * 2f - cs, cs);
-        _lineRect = new Rect(px + pad, py + pad + HeaderHeight - 3f * Scale, pw - pad * 2f, Mathf.Max(1f, Mathf.Round(1f * Scale)));
+        _lineRect = new Rect(px + pad, py + pad + HeaderHeight - 3f * Scale, pw - pad * 2f, Math.Max(1f, MathF.Round(1f * Scale)));
     }
 
     // 「開始」ボタンの左端 (IMGUI 座標・無ければ 0)。OnGUI は 1 フレームに何度も呼ばれるので、Update でときどき測っておく
@@ -253,20 +259,21 @@ public class YouTubeChatBubble : MonoBehaviour
         float pad = PanelPad;
         GUI.Box(_panelRect, GUIContent.none, _panelBg);
         GUI.Label(_titleRect, _titleContent, _titleStyle);
-        if (Event.current.type == EventType.Repaint) _closeState.background = _closeRect.Contains(Event.current.mousePosition) ? _closeHoverTex : _closeTex;
+        Event ev = Event.current;
+        if (ev.type == EventType.Repaint) _closeState.background = _closeRect.Contains(ev.mousePosition) ? _closeHoverTex : _closeTex;
         GUI.Box(_closeRect, _closeContent, _closeStyle);
         GUI.Box(_lineRect, GUIContent.none, _lineStyle);
 
         float top = _panelRect.y + pad + HeaderHeight;
         var outerRect = new Rect(_panelRect.x + pad, top, _panelRect.width - pad * 2f, _panelRect.yMax - pad - top);
-        float contentW = Mathf.Max(1f, outerRect.width - ScrollbarColumnWidth - 4f * Scale);
+        float contentW = Math.Max(1f, outerRect.width - ScrollbarColumnWidth - 4f * Scale);
 
         string body = BuildBody();
         float measuredH = _textStyle.CalcHeight(new GUIContent(body), contentW);
         _contentH = measuredH;
 
         var innerRect = new Rect(0, 0, contentW, _contentH);
-        float maxScroll = Mathf.Max(0f, _contentH - outerRect.height);
+        float maxScroll = Math.Max(0f, _contentH - outerRect.height);
 
         // スクロールバーは本編の板の縁と同じ灰の細いつまみだけにする (溝は透明)。skin は他の画面と共有なので描き終えたら戻す
         // 参照と元の絵は EnsureStyles で 1 回だけ取る (取るたびに包みができ、OnGUI は 1 フレームに何度も呼ばれる)

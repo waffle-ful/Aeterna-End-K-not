@@ -20,6 +20,41 @@ public class ImguiHost : MonoBehaviour
     private static float _nextPoll;
     private static bool _on = true;
 
+    private static Il2Direct.Method _activeAndEnabled;
+    private static bool _activeAndEnabledResolved;
+
+    // OnGUI は 1 フレームに何度も呼ばれ、ラッパー経由の isActiveAndEnabled は 1 回ごとに箱が出る
+    private static bool IsActiveAndEnabled(MonoBehaviour b)
+    {
+        if (!_activeAndEnabledResolved)
+        {
+            _activeAndEnabledResolved = true;
+            _activeAndEnabled = Il2Direct.Resolve<Behaviour>("get_isActiveAndEnabled", 0);
+        }
+
+        if (!Il2Direct.Enabled || !_activeAndEnabled.Ok) return b.isActiveAndEnabled;
+
+        bool direct = Il2Direct.Bool(_activeAndEnabled, b.Pointer);
+
+        // 最初の数十回だけラッパーと突き合わせ、食い違う環境では以後ずっとラッパーを使う
+        if (_activeAndEnabledChecks < 64)
+        {
+            _activeAndEnabledChecks++;
+            bool wrapped = b.isActiveAndEnabled;
+
+            if (direct != wrapped)
+            {
+                _activeAndEnabled = default;
+                Logger.Warn("direct isActiveAndEnabled disabled (disagrees with the engine)", "ImguiHost");
+                return wrapped;
+            }
+        }
+
+        return direct;
+    }
+
+    private static int _activeAndEnabledChecks;
+
     public static void Add(MonoBehaviour owner, Action draw, Func<bool> wants)
     {
         Entries.Add((owner, draw, wants));
@@ -52,7 +87,7 @@ public class ImguiHost : MonoBehaviour
             }
 
             // 無効にされた部品は描かない (部品ごとの OnGUI だった頃に本編がしていたのと同じ)
-            if (!owner.isActiveAndEnabled) continue;
+            if (!IsActiveAndEnabled(owner)) continue;
 
             // 判定が投げる部品は描く側に回す (描画側の例外は OnGUI がログに出す)
             try { any |= wants(); }
@@ -83,7 +118,7 @@ public class ImguiHost : MonoBehaviour
                 continue;
             }
 
-            if (!owner.isActiveAndEnabled) continue;
+            if (!IsActiveAndEnabled(owner)) continue;
 
             try { draw(); }
             catch (Exception e) { Utils.ThrowException(e); }

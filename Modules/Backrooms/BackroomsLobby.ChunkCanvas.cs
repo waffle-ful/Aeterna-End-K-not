@@ -155,7 +155,7 @@ public static partial class BackroomsLobby
     // 1 フレームに 1 回: 書いたセルをまとめて送り、四角形をプレイヤーのいるチャンクへ寄せる
     private static unsafe void FlushCanvas()
     {
-        if (!_chunkShaderMode || _canvasTex == null) return;
+        if (!_chunkShaderMode || !Il2Direct.Alive(_canvasTex)) return;
 
         if (_canvasDirty)
         {
@@ -179,9 +179,9 @@ public static partial class BackroomsLobby
             _canvasUploadCount++;
         }
 
-        if (_canvasGO == null || PlayerControl.LocalPlayer == null) return;
+        if (!Il2Direct.Alive(_canvasGO) || !Il2Direct.Alive(PlayerControl.LocalPlayer)) return;
         Vector2 feet = LocalPlayerFeet();
-        int cx = Mathf.FloorToInt(feet.x / ChunkSize), cy = Mathf.FloorToInt(feet.y / ChunkSize);
+        int cx = (int)Math.Floor(feet.x / ChunkSize), cy = (int)Math.Floor(feet.y / ChunkSize);
         if (cx == _canvasCx && cy == _canvasCy) return;
         _canvasCx = cx;
         _canvasCy = cy;

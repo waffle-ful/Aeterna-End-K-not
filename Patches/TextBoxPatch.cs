@@ -59,7 +59,7 @@ public static class TextBoxPatch
 
     // Identity guard: checks both Unity fake-null AND that the IL2CPP instance ID matches what we recorded
     // at creation time. A freed-then-reused slot passes Unity's fake-null but will have a different ID.
-    private static bool Valid(TextMeshPro tmp, int wantId) { if (!tmp || wantId == 0) return false; try { return tmp.GetInstanceID() == wantId; } catch { return false; } }
+    private static bool Valid(TextMeshPro tmp, int wantId) { if (!Modules.Il2Direct.Alive(tmp) || wantId == 0) return false; try { return tmp.GetInstanceID() == wantId; } catch { return false; } }
 
     // True when the string looks like one of our overlay GameObject names — used to blacklist garbage
     // that leaked into the chat field from a stale wrapper before it reaches the network.

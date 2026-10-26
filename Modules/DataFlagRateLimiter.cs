@@ -74,7 +74,7 @@ public static class DataFlagRateLimiter
     // 窓の長さ。ping が改善した分だけ窓を伸ばして保守側へ倒す (従来の計数リセット条件と同じ意図)。
     private static long WindowMs()
     {
-        int ping = AmongUsClient.Instance != null ? AmongUsClient.Instance.Ping : 0;
+        int ping = Il2Direct.Alive(AmongUsClient.Instance) ? AmongUsClient.Instance.Ping : 0;
 
         if (Clock.ElapsedMilliseconds - LastPingSampleMs >= 1000)
         {

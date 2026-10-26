@@ -67,7 +67,7 @@ internal static class HudManagerPatch
 
             if (GameStates.IsLobby)
             {
-                if (PingTrackerUpdatePatch.Instance && !SettingsText)
+                if (Il2Direct.Alive(PingTrackerUpdatePatch.Instance) && !Il2Direct.Alive(SettingsText))
                 {
                     SettingsText = Object.Instantiate(__instance.KillButton.cooldownTimerText, __instance.transform, true);
                     SettingsText.name = "EndKnot_SettingsText";
@@ -78,7 +78,7 @@ internal static class HudManagerPatch
                     SettingsText.overflowMode = TextOverflowModes.Overflow;
                     SettingsText.enableWordWrapping = false;
                 }
-                else if (!PingTrackerUpdatePatch.Instance && SettingsText)
+                else if (!Il2Direct.Alive(PingTrackerUpdatePatch.Instance) && Il2Direct.Alive(SettingsText))
                 {
                     Object.Destroy(SettingsText.gameObject);
                     SettingsText = null;
@@ -90,7 +90,7 @@ internal static class HudManagerPatch
                 //    SettingsText.enabled = SettingsText.text != string.Empty;
                 //}
             }
-            else if (SettingsText)
+            else if (Il2Direct.Alive(SettingsText))
             {
                 Object.Destroy(SettingsText.gameObject);
                 SettingsText = null;
@@ -98,7 +98,7 @@ internal static class HudManagerPatch
 
             if (AmongUsClient.Instance.AmHost)
             {
-                if (!OverriddenRolesText)
+                if (!Il2Direct.Alive(OverriddenRolesText))
                 {
                     OverriddenRolesText = Object.Instantiate(__instance.KillButton.cooldownTimerText, __instance.transform, true);
                     OverriddenRolesText.alignment = TextAlignmentOptions.Right;
@@ -666,8 +666,8 @@ internal static class LobbyKillButtonHudPatch
     public static void Postfix(HudManager __instance)
     {
         if (!GameStates.IsLobby) return;
-        if (PlayerControl.LocalPlayer == null || PlayerControl.LocalPlayer.Data == null) return;
-        if (!__instance || !__instance.KillButton) return;
+        if (!Il2Direct.Alive(PlayerControl.LocalPlayer) || !Il2Direct.Alive(PlayerControl.LocalPlayer.Data)) return;
+        if (!Il2Direct.Alive(__instance) || !Il2Direct.Alive(__instance.KillButton)) return;
 
         PlayerControl localPlayer = PlayerControl.LocalPlayer;
         KillButton killButton = __instance.KillButton;
@@ -683,12 +683,12 @@ internal static class LobbyKillButtonHudPatch
         PlayerControl closest = FastVector2.TryGetClosestPlayerInRangeTo(localPlayer, Options.LobbyKillRange.GetFloat(), out PlayerControl c,
             x => x.Data is { IsDead: false } && !Main.LobbyDead.Contains(x.PlayerId)) ? c : null;
 
-        if (killButton.currentTarget && killButton.currentTarget != closest)
+        if (Il2Direct.Alive(killButton.currentTarget) && killButton.currentTarget != closest)
             killButton.currentTarget.ToggleHighlight(false, RoleTeamTypes.Impostor);
 
         killButton.currentTarget = closest;
 
-        if (killButton.currentTarget)
+        if (Il2Direct.Alive(killButton.currentTarget))
         {
             killButton.currentTarget.ToggleHighlight(true, RoleTeamTypes.Impostor);
             killButton.SetEnabled();
@@ -709,7 +709,7 @@ internal static class SetVentOutlinePatch
         Color color = PlayerControl.LocalPlayer.GetRoleColor();
         Material material = __instance.myRend.material;
         material.SetColor(OutlineColor, color);
-        material.SetColor(AddColor, mainTarget ? color : Color.clear);
+        material.SetColor(AddColor, mainTarget ? color : FxMath.Rgba(0f, 0f, 0f, 0f));
     }
 }
 
@@ -1573,7 +1573,7 @@ internal static class TaskPanelBehaviourPatch
     {
         if (Utils.IsTaskingGameMode())
         {
-            if (!TabText) TabText = __instance.tab.transform.FindChild("TabText_TMP").GetComponent<TextMeshPro>();
+            if (!Il2Direct.Alive(TabText)) TabText = __instance.tab.transform.FindChild("TabText_TMP").GetComponent<TextMeshPro>();
 
             float now = Time.unscaledTime;
 
@@ -1629,6 +1629,7 @@ internal static class TaskPanelBehaviourPatch
         Transform transform = RolePanelBgTf;
         Bounds bgBounds = RolePanelBg.sprite.bounds;
         Vector3 vector = bgBounds.extents;
+        float bgSizeX = vector.x * 2f;
         Vector3 vector2 = RolePanelTabSr.sprite.bounds.extents;
         Vector3 textSize = RolePanelTaskText.textBounds.size;
 
@@ -1661,22 +1662,32 @@ internal static class TaskPanelBehaviourPatch
         if (!Il2Direct.Alive(GameManager.Instance)) return;
 
         var closePosition = new Vector3(
-            -bgBounds.size.x * bgScale.x,
+            -bgSizeX * bgScale.x,
             __instance.closedPosition.y,
             __instance.closedPosition.z);
         __instance.closedPosition = closePosition;
 
+        float deltaTime = Time.deltaTime;
+
         __instance.timer = __instance.open
-            ? Mathf.Min(1f, __instance.timer + (Time.deltaTime / __instance.animationTimeSeconds))
-            : Mathf.Max(0f, __instance.timer - (Time.deltaTime / __instance.animationTimeSeconds));
+            ? Math.Min(1f, __instance.timer + (deltaTime / __instance.animationTimeSeconds))
+            : Math.Max(0f, __instance.timer - (deltaTime / __instance.animationTimeSeconds));
 
         var relativePos = new Vector3(
-            Mathf.SmoothStep(__instance.closedPosition.x, __instance.openPosition.x, __instance.timer),
-            Mathf.SmoothStep(__instance.closedPosition.y, __instance.openPosition.y, __instance.timer),
+            SmoothStep(__instance.closedPosition.x, __instance.openPosition.x, __instance.timer),
+            SmoothStep(__instance.closedPosition.y, __instance.openPosition.y, __instance.timer),
             __instance.openPosition.z);
         RolePanelTf.localPosition = AspectPosition.ComputePosition(
             AspectPosition.EdgeAlignments.LeftTop,
             relativePos);
+    }
+
+    // Mathf.SmoothStep と同じ式
+    private static float SmoothStep(float from, float to, float t)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        t = (-2f * t * t * t) + (3f * t * t);
+        return (to * t) + (from * (1f - t));
     }
 
     [HarmonyPatch(nameof(TaskPanelBehaviour.SetTaskText))]
