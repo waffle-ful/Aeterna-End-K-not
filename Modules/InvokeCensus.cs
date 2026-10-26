@@ -382,6 +382,19 @@ public static unsafe class InvokeCensus
         foreach (KeyValuePair<string, int> kv in Sites.OrderByDescending(k => k.Value).Take(40))
             report($"  S {kv.Value * (SampleMask + 1) / sec,7:F0}/s {kv.Key}");
 
+        // 箱詰めのある呼び出し元だけを、呼び出し元の関数ごとに合算して並べる (il2cpp 側のゴミの持ち主)
+        var boxOwners = new Dictionary<string, int>();
+        foreach (KeyValuePair<string, int> kv in Sites)
+        {
+            if (!kv.Key.EndsWith("[box]", StringComparison.Ordinal)) continue;
+            int arrow = kv.Key.IndexOf(" <- ", StringComparison.Ordinal);
+            string owner = arrow > 0 ? kv.Key[..arrow] : kv.Key;
+            boxOwners[owner] = boxOwners.GetValueOrDefault(owner) + kv.Value;
+        }
+
+        foreach (KeyValuePair<string, int> kv in boxOwners.OrderByDescending(k => k.Value).Take(40))
+            report($"  B {kv.Value * (SampleMask + 1) / sec,7:F0}/s {kv.Key}");
+
         long allocTotal = AllocBytes.Sum();
         report($"OK alloc via exports {allocTotal / 1024.0 / sec:F0}KB/s " + string.Join(" ", AllocKindNames.Select((n, k) => $"{n}={AllocBytes[k] / 1024.0 / sec:F0}KB/s({AllocCalls[k] / sec:F0}/s)")));
 

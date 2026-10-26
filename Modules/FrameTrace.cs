@@ -20,6 +20,32 @@ public static class FrameTrace
     private static long[] _late, _gui;
     private static int _cur = -1;
     private static FrameTraceProbe _probe;
+    private static long _modTicks, _modTopTicks, _modSubTicks;
+    private static string _modTop, _modSub;
+
+    // AllocProbe の区間の実時間をこのフレームぶん積む (合計は親区間だけ・子区間は最大の 1 つを控える)。記録中でなければ何もしない。
+    internal static void NoteMod(string bucket, long dt, bool parent)
+    {
+        if (_cur < 0) return;
+
+        if (!parent)
+        {
+            if (dt > _modSubTicks)
+            {
+                _modSubTicks = dt;
+                _modSub = bucket;
+            }
+
+            return;
+        }
+
+        _modTicks += dt;
+        if (dt > _modTopTicks)
+        {
+            _modTopTicks = dt;
+            _modTop = bucket;
+        }
+    }
 
     internal static void OnLate()
     {
@@ -61,6 +87,9 @@ public static class FrameTrace
         var eof = new long[frames];
         var fixedSteps = new int[frames];
         var frameNo = new int[frames];
+        var modTicks = new long[frames];
+        var modTop = new string[frames];
+        var modSub = new string[frames];
         _late = new long[frames];
         _gui = new long[frames];
         double toMs = 1000.0 / Stopwatch.Frequency;
@@ -74,6 +103,15 @@ public static class FrameTrace
         {
             yield return null;
             upd[i] = Stopwatch.GetTimestamp();
+            if (i == 0)
+            {
+                _modTicks = 0;
+                _modTopTicks = 0;
+                _modTop = null;
+                _modSubTicks = 0;
+                _modSub = null;
+            }
+
             _cur = i;
             float ft = Time.fixedTime;
             fixedSteps[i] = fixedDt > 0f ? (int)Math.Round((ft - prevFixed) / fixedDt) : -1;
@@ -81,6 +119,14 @@ public static class FrameTrace
             frameNo[i] = Time.frameCount;
             yield return new WaitForEndOfFrame();
             eof[i] = Stopwatch.GetTimestamp();
+            modTicks[i] = _modTicks;
+            modTop[i] = _modTop;
+            modSub[i] = _modSub;
+            _modTicks = 0;
+            _modTopTicks = 0;
+            _modTop = null;
+            _modSubTicks = 0;
+            _modSub = null;
         }
 
         _cur = -1;
@@ -89,7 +135,7 @@ public static class FrameTrace
         try
         {
             var sb = new StringBuilder(frames * 32);
-            sb.AppendLine("frame,upd_ms,rnd_ms,total_ms,fixed,late_ms,cam_ms,gui_ms");
+            sb.AppendLine("frame,upd_ms,rnd_ms,total_ms,fixed,late_ms,cam_ms,gui_ms,mod_ms,mod_top,mod_sub");
             for (int i = 0; i < frames; i++)
             {
                 long start = i == 0 ? prevEof : eof[i - 1];
@@ -101,6 +147,7 @@ public static class FrameTrace
                     sb.Append(((_late[i] - upd[i]) * toMs).ToString("F3")).Append(',').Append(((_gui[i] - _late[i]) * toMs).ToString("F3")).Append(',')
                         .Append(((eof[i] - _gui[i]) * toMs).ToString("F3"));
                 else sb.Append("-1,-1,-1");
+                sb.Append(',').Append((modTicks[i] * toMs).ToString("F3")).Append(',').Append(modTop[i] ?? "-").Append(',').Append(modSub[i] ?? "-");
                 sb.AppendLine();
             }
 
