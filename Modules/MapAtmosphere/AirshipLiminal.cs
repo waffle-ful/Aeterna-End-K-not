@@ -156,12 +156,12 @@ public static class AirshipLiminal
         {
             ShipStatus ship = ShipStatus.Instance;
             // イントロ (役職発表) 中は組み立てない。明けてからフェードインさせる。
-            bool onShip = Main.MapAtmosphere?.Value == true && ship && GameStates.IsInGame && Main.CurrentMap == MapNames.Airship
+            bool onShip = Main.MapAtmosphere?.Value == true && Il2Direct.Alive(ship) && GameStates.IsInGame && Main.CurrentMap == MapNames.Airship
                           && HudManager.InstanceExists;
             // 組み立て済みならイントロの有無は見ない (毎フレームの bool 読みを 1 本減らす)。
             bool want = onShip && (_root is not null || !HudManager.Instance.IsIntroDisplayed);
 
-            if (!_root)
+            if (!Il2Direct.Alive(_root))
             {
                 if (_root is not null) Teardown(); // 船ごと破棄された (ロビー復帰)。背景色を戻す
                 if (!want)

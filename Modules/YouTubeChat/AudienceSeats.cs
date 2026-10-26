@@ -433,22 +433,22 @@ public class AudienceSeats : MonoBehaviour
     // ── HUD のカメラに置く絵 ───────────────────────────────────
 
     private Vector3 ToLocal(float px, float py, float z, float zoom) =>
-        FxMath.V3((px / Screen.width - 0.5f) * 2f * _halfW * zoom, (0.5f - py / Screen.height) * 2f * _halfH * zoom, z);
+        FxMath.V3((px / Il2Direct.ScreenWidth - 0.5f) * 2f * _halfW * zoom, (0.5f - py / Il2Direct.ScreenHeight) * 2f * _halfH * zoom, z);
 
     // 台を作った時からカメラの写す広さが何倍になったか
     private float CameraZoom()
     {
-        if (!_cam || _halfH <= 0f) return 1f;
+        if (!Il2Direct.Alive(_cam) || _halfH <= 0f) return 1f;
         float zoom = _cam.orthographicSize / _halfH;
         return zoom > 0f ? zoom : 1f;
     }
 
-    private float PxToUnits => 2f * _halfH / Screen.height;
+    private float PxToUnits => 2f * _halfH / Il2Direct.ScreenHeight;
 
     private void UpdateWorld(bool show, float now)
     {
         // 画面が作り直されると絵も一緒に消えるので、席の参照を捨てる
-        if (_rootAlive && !_root)
+        if (_rootAlive && !Il2Direct.Alive(_root))
         {
             _rootAlive = false;
             _root = null;
@@ -486,8 +486,8 @@ public class AudienceSeats : MonoBehaviour
             Seat seat = _seats[i];
             if (seat == null) continue;
 
-            if (!seat.Crew && now >= seat.RetrySpawnAt) SpawnCrew(seat, s, now);
-            if (!seat.Crew) continue;
+            if (!Il2Direct.Alive(seat.Crew) && now >= seat.RetrySpawnAt) SpawnCrew(seat, s, now);
+            if (!Il2Direct.Alive(seat.Crew)) continue;
 
             TickFidget(seat, now);
             float top = CrewTop(seat, i, s, now);
@@ -506,7 +506,7 @@ public class AudienceSeats : MonoBehaviour
             tf.localScale = FxMath.V3(FacesLeft(seat, now) ? -k : k, k * breath, 1f);
 
             float g = now - seat.GlowStart;
-            if (seat.GlowSr)
+            if (Il2Direct.Alive(seat.GlowSr))
             {
                 if (g < GlowSeconds)
                 {
@@ -764,7 +764,8 @@ public class AudienceSeats : MonoBehaviour
             }
 
             float bw = BenchWidth(s);
-            _pos = FxMath.V2(FxMath.Clamp(_pos.x, 0f, FxMath.Max(0f, Screen.width - bw)), FxMath.Clamp(_pos.y, FxMath.Min(200f * s, Screen.height), Screen.height));
+            int screenW = Il2Direct.ScreenWidth, screenH = Il2Direct.ScreenHeight;
+            _pos = FxMath.V2(FxMath.Clamp(_pos.x, 0f, FxMath.Max(0f, screenW - bw)), FxMath.Clamp(_pos.y, FxMath.Min(200f * s, screenH), screenH));
 
             HandleDrag(s);
             if (Event.current.type != EventType.Repaint) return;
@@ -795,7 +796,8 @@ public class AudienceSeats : MonoBehaviour
             case EventType.MouseDrag when _dragging:
                 Vector2 np = e.mousePosition - _dragOffset;
                 if ((np - _pos).sqrMagnitude > 36f) _didDrag = true;
-                _pos = FxMath.V2(FxMath.Clamp(np.x, 0f, FxMath.Max(0f, Screen.width - w)), FxMath.Clamp(np.y, FxMath.Min(200f * s, Screen.height), FxMath.Max(0f, Screen.height - 40f * s)));
+                int dragH = Il2Direct.ScreenHeight;
+                _pos = FxMath.V2(FxMath.Clamp(np.x, 0f, FxMath.Max(0f, Il2Direct.ScreenWidth - w)), FxMath.Clamp(np.y, FxMath.Min(200f * s, dragH), FxMath.Max(0f, dragH - 40f * s)));
                 e.Use();
                 break;
             case EventType.MouseUp when _dragging:
@@ -818,7 +820,7 @@ public class AudienceSeats : MonoBehaviour
     {
         benchLeft = benchRight = bottom = width = 0f;
         AudienceSeats seats = Instance;
-        if (!seats || !seats._shown || !seats._posInitialized) return false;
+        if (!Il2Direct.Alive(seats) || !seats._shown || !seats._posInitialized) return false;
 
         float s = Scale;
         width = seats.BenchWidth(s);
@@ -895,7 +897,7 @@ public class AudienceSeats : MonoBehaviour
 
         float w = seat.BubbleW, h = BubbleHeight(seat, s);
         float by = seat.Y;
-        float bx = FxMath.Clamp(cx - w * 0.5f, 4f * s, Screen.width - w - 4f * s);
+        float bx = FxMath.Clamp(cx - w * 0.5f, 4f * s, Il2Direct.ScreenWidth - w - 4f * s);
 
         Color edge = seat.Accent;
         float bd = seat.IsCommand ? border * 1.8f : border;

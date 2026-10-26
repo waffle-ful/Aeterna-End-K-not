@@ -71,8 +71,8 @@ internal static class LoadingScreen
             if (HintHideTimer <= 15f) HintHideTimer += Time.deltaTime;
 
             PlayerControl lp = PlayerControl.LocalPlayer;
-            if (!Il2Direct.Alive(lp) || !Il2Direct.Alive(lp.MyPhysics) || lp.MyPhysics.Animations == null) return;
-            if (AmongUsClient.Instance == null) return;
+            if (!Il2Direct.Alive(lp) || !Il2Direct.Alive(lp.MyPhysics) || !Il2Direct.Alive(lp.MyPhysics.Animations)) return;
+            if (!Il2Direct.Alive(AmongUsClient.Instance)) return;
             if (!HudManager.InstanceExists || !Il2Direct.Alive(HudManager.Instance.Chat)) return;
 
             PlayerAnimations anims = lp.MyPhysics.Animations;
@@ -91,7 +91,7 @@ internal static class LoadingScreen
 
             if (Il2Direct.Alive(LoadingAnimation))
             {
-                if (ModManager.Instance == null || !ModManager.Instance.ModStamp) return;
+                if (!Il2Direct.Alive(ModManager.Instance) || !Il2Direct.Alive(ModManager.Instance.ModStamp)) return;
                 Vector3 basePos = ModManager.Instance.ModStamp.transform.position;
 
                 float x = basePos.x - 9.8f;
@@ -114,7 +114,7 @@ internal static class LoadingScreen
                 case true when !ErrorText.HasHint:
                     if (HintHideTimer > 15f) NewHint();
                     HintHideTimer = 0f;
-                    if (ErrorText.Instance != null) ErrorText.Instance.AddError(ErrorCode.LoadingHint);
+                    if (Il2Direct.Alive(ErrorText.Instance)) ErrorText.Instance.AddError(ErrorCode.LoadingHint);
                     break;
             }
         }

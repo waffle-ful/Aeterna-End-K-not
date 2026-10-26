@@ -19,8 +19,8 @@ public static class Zoom
     {
         try
         {
-            if (!Main) Main = Camera.main;
-            if (!Main) return;
+            if (!EndKnot.Modules.Il2Direct.Alive(Main)) Main = Camera.main;
+            if (!EndKnot.Modules.Il2Direct.Alive(Main)) return;
 
             if (CanZoom)
             {
@@ -100,7 +100,7 @@ public static class Zoom
 
     public static void SetZoomSize(bool times = false, bool reset = false)
     {
-        if (!Main || !HudManager.InstanceExists) return;
+        if (!EndKnot.Modules.Il2Direct.Alive(Main) || !HudManager.InstanceExists) return;
 
         var size = 1.5f;
         if (!times) size = 1 / size;
@@ -137,13 +137,16 @@ public static class Zoom
         }
     }
 
+    // Mathf.Approximately(o, 3f) と同じ式 (Mathf は呼ぶたびに箱が出る)
+    private static bool IsOrthoThree(float o) => Math.Abs(3f - o) < Math.Max(1E-06f * Math.Max(Math.Abs(o), 3f), float.Epsilon * 8f);
+
     public static void OnFixedUpdate()
     {
-        if (!Main || !HudManager.InstanceExists) return;
+        if (!EndKnot.Modules.Il2Direct.Alive(Main) || !HudManager.InstanceExists) return;
 
         // ロビーでは IsAlive を見ない — 前ゲームの MainRole (GM/観戦者) が PlayerStates に残留したまま
         // IsAlive()=false になり、ゲーム後ロビーの影 (Backrooms 含む) が毎フレ強制 OFF される。
-        HudManager.Instance?.ShadowQuad?.gameObject.SetActive(Mathf.Approximately(Main.orthographicSize, 3.0f) && (GameStates.IsLobby || PlayerControl.LocalPlayer.IsAlive()));
+        HudManager.Instance?.ShadowQuad?.gameObject.SetActive(IsOrthoThree(Main.orthographicSize) && (GameStates.IsLobby || PlayerControl.LocalPlayer.IsAlive()));
     }
 }
 

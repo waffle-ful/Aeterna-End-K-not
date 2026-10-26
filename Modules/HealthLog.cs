@@ -487,14 +487,14 @@ public static class HealthLog
         // フルスクリーン切替/解像度変更の帰属計器 (「全画面切替→3-4秒スタッター」の
         // 1-bit 検証用)。切替ストール中は Tick 自体が止まるため、切替検知行は解除フレームで framestall ANOM と
         // 同時に flush される — reschg 行と framestall 行の t= 一致/近接が「切替起因」の判定条件。
-        if (Screen.fullScreen != _lastFullScreen || Screen.width != _lastScreenW || Screen.height != _lastScreenH)
+        if (Screen.fullScreen != _lastFullScreen || Il2Direct.ScreenWidth != _lastScreenW || Il2Direct.ScreenHeight != _lastScreenH)
         {
             if (_lastScreenW != 0)
-                NoteAnom($"ANOM live kind=reschg fs={_lastFullScreen}->{Screen.fullScreen} res={_lastScreenW}x{_lastScreenH}->{Screen.width}x{Screen.height} t={now}");
+                NoteAnom($"ANOM live kind=reschg fs={_lastFullScreen}->{Screen.fullScreen} res={_lastScreenW}x{_lastScreenH}->{Il2Direct.ScreenWidth}x{Il2Direct.ScreenHeight} t={now}");
 
             _lastFullScreen = Screen.fullScreen;
-            _lastScreenW = Screen.width;
-            _lastScreenH = Screen.height;
+            _lastScreenW = Il2Direct.ScreenWidth;
+            _lastScreenH = Il2Direct.ScreenHeight;
         }
 
         // フォーカス喪失/復帰の帰属計器 (2026-08-15: ロビー中 5-7 秒 framestall の gc0d=0・reschg 不発ケースの

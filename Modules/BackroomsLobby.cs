@@ -2151,7 +2151,7 @@ public static partial class BackroomsLobby
     public static void UpdateStreaming(bool force = false)
     {
         if (!_inBackrooms) return;
-        if (PlayerControl.LocalPlayer == null) return;
+        if (!Il2Direct.Alive(PlayerControl.LocalPlayer)) return;
 
         // カスタムマップ全域ロードモード: 入場時に全チャンクをロード済みで、アンロードもしない。
         // 歩行/ズームに応じた load/unload は不要なので即 return (cull/vision は別系統で毎フレ走る)。
@@ -2160,15 +2160,15 @@ public static partial class BackroomsLobby
         // no-clip ON で GetTruePosition() が 127u 上空を返す罠を回避 ([[LocalPlayerFeet]])。
         // streaming center が空中にズレると player 周囲の chunk が unload されて真っ暗になる。
         Vector2 p = LocalPlayerFeet();
-        int playerCx = Mathf.FloorToInt(p.x / ChunkSize);
-        int playerCy = Mathf.FloorToInt(p.y / ChunkSize);
+        int playerCx = (int)Math.Floor(p.x / ChunkSize);
+        int playerCy = (int)Math.Floor(p.y / ChunkSize);
 
         // 適応ロード半径: カメラに映る範囲 (視界半幅+4u) をロード窓が必ず覆う (/bbzoom 観察で void が
         // 見えないように)。上限 6 = 13×13 chunks (暴走ガード・/bbzoom の ortho 上限 50 と整合)。
         int r = ActiveChunkRadius;
         Camera cam = Camera.main;
-        if (cam != null)
-            r = Math.Min(Math.Max(r, Mathf.CeilToInt((cam.orthographicSize * cam.aspect + 4f) / ChunkSize)), 6);
+        if (Il2Direct.Alive(cam))
+            r = Math.Min(Math.Max(r, (int)Math.Ceiling((cam.orthographicSize * cam.aspect + 4f) / ChunkSize)), 6);
 
         // ズーム変化 (= r 変化) でも再評価が走るよう、chunk 一致だけでなく r も比較する
         if (!force && _streamValid && playerCx == _streamCx && playerCy == _streamCy && r == _lastStreamRadius) return;
@@ -3974,14 +3974,14 @@ public static partial class BackroomsLobby
     private static void ApplyZoomAndAdaptiveView()
     {
         Camera cam = Camera.main;
-        if (cam == null) return;
+        if (!Il2Direct.Alive(cam)) return;
 
         if (_zoomOverride > 0f)
         {
             // チャットを開くと Zoom.cs の !CanZoom 経路が ortho を 3 に戻すため毎フレ上書き。
             // UICamera は触らない (HUD サイズ据置)。ShadowQuad は ortho≈3 のみ表示 (Zoom.cs L119/142 と同じ規約)
             cam.orthographicSize = _zoomOverride;
-            if (HudManager.InstanceExists && PlayerControl.LocalPlayer != null)
+            if (HudManager.InstanceExists && Il2Direct.Alive(PlayerControl.LocalPlayer))
                 HudManager.Instance.ShadowQuad?.gameObject.SetActive(Mathf.Approximately(cam.orthographicSize, 3f) && PlayerControl.LocalPlayer.IsAlive());
         }
 
@@ -3989,8 +3989,8 @@ public static partial class BackroomsLobby
 
         // 適応 cull: 実効表示半径 = max(基準値, カメラ視界半幅+4u)。1u 超の変化時のみ sweep を invalidate (churn 防止)
         float halfW = cam.orthographicSize * cam.aspect;
-        float wantCull = Mathf.Max(_cullBase, halfW + 4f);
-        if (Mathf.Abs(wantCull - CullRadius) > 1f)
+        float wantCull = Math.Max(_cullBase, halfW + 4f);
+        if (Math.Abs(wantCull - CullRadius) > 1f)
         {
             CullRadius = wantCull;
             CullRadiusSqr = wantCull * wantCull;
@@ -4008,7 +4008,7 @@ public static partial class BackroomsLobby
         if (EkmapLoader.TickAutoReload())
         {
             PlayerControl lp = PlayerControl.LocalPlayer;
-            if (lp != null) EnterCustomMap(lp.PlayerId);
+            if (Il2Direct.Alive(lp)) EnterCustomMap(lp.PlayerId);
             return; // 再入場した同フレームは以降の更新をスキップ (EnterCustomMap が再構築済み)
         }
 
@@ -4019,7 +4019,11 @@ public static partial class BackroomsLobby
             // 二重壁 far-face gating: プレイヤーが各壁のどちら側に居るかで遠い面だけ active に。
             //   光源 (= body center) と同じアンカーを使う。壁全体を lit に保つため毎フレ更新が必須。
             PlayerControl glp = PlayerControl.LocalPlayer;
-            if (glp != null) BackroomsCasters.UpdateGating(glp.transform.position.x, glp.transform.position.y);
+            if (Il2Direct.Alive(glp))
+            {
+                Vector3 gp = glp.transform.position;
+                BackroomsCasters.UpdateGating(gp.x, gp.y);
+            }
             BackroomsShadow.Drive();
         }
 

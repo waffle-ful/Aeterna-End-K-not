@@ -992,7 +992,7 @@ public static class Utils
     {
         if (GameStates.IsLobby) return false;
         if (p.Tasks == null) return false;
-        if (!p.Role) return false;
+        if (!Il2Direct.Alive(p.Role)) return false;
 
         var hasTasks = true;
         if (!Main.PlayerStates.TryGetValue(p.PlayerId, out PlayerState state)) return false; // ロビー途中Joinで PlayerStates 未登録の窓 (KeyNotFoundException スパム防止)

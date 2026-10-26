@@ -327,18 +327,18 @@ public static class BackroomsShadow
 
         try
         {
-            if (_darkLevel >= 0f && HudManager.InstanceExists && HudManager.Instance.ShadowQuad != null)
+            if (_darkLevel >= 0f && HudManager.InstanceExists && Il2Direct.Alive(HudManager.Instance.ShadowQuad))
             {
                 Material sq = HudManager.Instance.ShadowQuad.material;
-                if (sq != null && sq.HasProperty("_Color"))
+                if (Il2Direct.Alive(sq) && sq.HasProperty("_Color"))
                     sq.SetColor("_Color", new Color(_darkLevel, _darkLevel, _darkLevel, 1f));
             }
 
             if (_edgeBlur >= 0f)
             {
-                LightSource ls = PlayerControl.LocalPlayer != null ? PlayerControl.LocalPlayer.lightSource : null;
-                Material lc = ls != null ? ls.LightCutawayMaterial : null;
-                if (lc != null && lc.HasProperty("_EdgeBlur")) lc.SetFloat("_EdgeBlur", _edgeBlur);
+                LightSource ls = Il2Direct.Alive(PlayerControl.LocalPlayer) ? PlayerControl.LocalPlayer.lightSource : null;
+                Material lc = Il2Direct.Alive(ls) ? ls.LightCutawayMaterial : null;
+                if (Il2Direct.Alive(lc) && lc.HasProperty("_EdgeBlur")) lc.SetFloat("_EdgeBlur", _edgeBlur);
             }
         }
         catch { /* マテリアル未準備 — 無視 */ }

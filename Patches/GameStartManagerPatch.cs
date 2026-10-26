@@ -355,7 +355,7 @@ public static class GameStartManagerPatch
             instance.HostPrivateButton.gameObject.SetActive(!isPublic);
             instance.HostPublicButton.gameObject.SetActive(isPublic);
 
-            if ((Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) && Input.GetKeyDown(KeyCode.C))
+            if ((Il2Direct.GetKey(KeyCode.LeftControl) || Il2Direct.GetKey(KeyCode.RightControl)) && Il2Direct.GetKeyDown(KeyCode.C))
                 ClipboardHelper.PutClipboardString(GameCode.IntToGameName(AmongUsClient.Instance.GameId));
 
             if (GameData.Instance.PlayerCount != instance.LastPlayerCount)
@@ -560,11 +560,11 @@ public static class GameStartManagerPatch
                 tmp.gameObject.SetActive(true);
 
                 // Lobby timer
-                if (GameData.Instance && HudManager.InstanceExists && AmongUsClient.Instance.NetworkMode != NetworkModes.LocalGame && GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
+                if (Il2Direct.Alive(GameData.Instance) && HudManager.InstanceExists && AmongUsClient.Instance.NetworkMode != NetworkModes.LocalGame && GameStates.CurrentServerType == GameStates.ServerType.Vanilla)
                 {
                     float timer = Timer;
 
-                    if (!LobbyTimerBg)
+                    if (!Il2Direct.Alive(LobbyTimerBg))
                     {
                         LobbyTimerBg = HudManager.Instance.LobbyTimerExtensionUI.timerText.transform.parent.transform.Find("LabelBackground").GetComponent<SpriteRenderer>();
                         // sprite は不変 — 毎フレーム LoadSprite (キー文字列生成 + 辞書引き) して代入し直す必要はない

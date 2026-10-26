@@ -1748,13 +1748,17 @@ internal static class ExtendedPlayerControl
 
         public Vector2 Pos()
         {
-            if (player.AmOwner) return player.transform.position;
+            if (player.AmOwner)
+            {
+                Vector3 ownPos = player.transform.position;
+                return new Vector2(ownPos.x, ownPos.y);
+            }
 
             try
             {
                 var queue = player.NetTransform.incomingPosQueue;
 
-                if (queue.Count > 0 && player.NetTransform.isActiveAndEnabled && !player.NetTransform.isPaused)
+                if (queue._size > 0 && player.NetTransform.isActiveAndEnabled && !player.NetTransform.isPaused)
                 {
                     // queue._array の読み出しは毎回新しい配列 wrapper を作り 1 回 ≈695B の managed 確保になる
                     // (2026-09-07 実測: Length / indexer 側は 0)。先に確保無しの直読みを試し、駄目な時だけ従来経路。
@@ -1768,7 +1772,8 @@ internal static class ExtendedPlayerControl
             }
             catch (Exception e) { ThrowException(e); }
 
-            return player.transform.position;
+            Vector3 fallbackPos = player.transform.position;
+            return new Vector2(fallbackPos.x, fallbackPos.y);
         }
 
         public Vector3 Pos3()

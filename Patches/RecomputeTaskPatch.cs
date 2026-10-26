@@ -12,7 +12,7 @@ internal class CustomTaskCountsPatch
 
         foreach (NetworkedPlayerInfo p in __instance.AllPlayers)
         {
-            if (!p) continue;
+            if (!Modules.Il2Direct.Alive(p)) continue;
 
             bool hasTasks = Utils.HasTasks(p) && Main.PlayerStates[p.PlayerId].TaskState.AllTasksCount > 0;
 

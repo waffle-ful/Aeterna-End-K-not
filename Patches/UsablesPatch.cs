@@ -201,7 +201,8 @@ internal static class CanUseVentPatch
         {
             Vector3 center = playerControl.Collider.bounds.center;
             Vector3 ventPosition = __instance.transform.position;
-            actualDistance = Vector2.Distance(center, ventPosition);
+            float distX = center.x - ventPosition.x, distY = center.y - ventPosition.y;
+            actualDistance = (float)System.Math.Sqrt(distX * distX + distY * distY);
             canUse &= actualDistance <= __instance.UsableDistance && !PhysicsHelpers.AnythingBetween(playerControl.Collider, center, ventPosition, Constants.ShipOnlyMask, false);
         }
 

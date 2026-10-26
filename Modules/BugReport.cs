@@ -129,7 +129,7 @@ public static class BugReport
     // 窓は HudManager の子なので、開いたまま部屋を抜けると窓ごと消える。印だけ残らないよう窓の生存も見る
     public static bool IsOpen
     {
-        get => _open && _panel;
+        get => _open && Il2Direct.Alive(_panel);
         private set => _open = value;
     }
 
@@ -153,10 +153,10 @@ public static class BugReport
             }
 
             PlayerControl me = PlayerControl.LocalPlayer;
-            bool show = me && hud.SettingsButton && hud.SettingsButton.activeInHierarchy && (IsOpen || !CleanShot.On) && (GameStates.IsLobby || !GameStates.IsEnded); // 終了の印は次の試合開始まで残る
+            bool show = Il2Direct.Alive(me) && Il2Direct.Alive(hud.SettingsButton) && hud.SettingsButton.activeInHierarchy && (IsOpen || !CleanShot.On) && (GameStates.IsLobby || !GameStates.IsEnded); // 終了の印は次の試合開始まで残る
 
             EnsureHudButton(hud);
-            if (_hudButton)
+            if (Il2Direct.Alive(_hudButton))
             {
                 if (_hudButton.activeSelf != show) _hudButton.SetActive(show);
                 if (show && (Time.frameCount & 7) == 0) PlaceHudButton(hud);
@@ -175,7 +175,7 @@ public static class BugReport
 
     private static void EnsureHudButton(HudManager hud)
     {
-        if (_hudButton || !hud.SettingsButton) return;
+        if (Il2Direct.Alive(_hudButton) || !Il2Direct.Alive(hud.SettingsButton)) return;
 
         // 設定のボタンを型紙にして、右上の他のボタンと同じ見た目・同じ押し心地にする
         _hudButton = Object.Instantiate(hud.SettingsButton, hud.SettingsButton.transform.parent);
@@ -232,18 +232,19 @@ public static class BugReport
         Vector3 s = settings.position;
         float left = s.x;
 
-        if (hud.MapButton && hud.MapButton.gameObject.activeInHierarchy)
+        if (Il2Direct.Alive(hud.MapButton) && hud.MapButton.gameObject.activeInHierarchy)
         {
-            float gap = Math.Abs(hud.MapButton.transform.position.x - s.x);
+            float mapX = hud.MapButton.transform.position.x;
+            float gap = Math.Abs(mapX - s.x);
             if (gap is > 0.4f and < 1.5f) _spacing = gap;
-            left = Math.Min(left, hud.MapButton.transform.position.x);
+            left = Math.Min(left, mapX);
         }
 
-        if (hud.MatchInfoButton && hud.MatchInfoButton.gameObject.activeInHierarchy)
+        if (Il2Direct.Alive(hud.MatchInfoButton) && hud.MatchInfoButton.gameObject.activeInHierarchy)
             left = Math.Min(left, hud.MatchInfoButton.transform.position.x);
 
         ChatController chat = hud.Chat;
-        if (chat && chat.chatButton && chat.chatButton.gameObject.activeInHierarchy)
+        if (Il2Direct.Alive(chat) && Il2Direct.Alive(chat.chatButton) && chat.chatButton.gameObject.activeInHierarchy)
             left = Math.Min(left, chat.chatButton.transform.position.x);
 
         Vector3 want = new(left - _spacing, s.y, s.z);

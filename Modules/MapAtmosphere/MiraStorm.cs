@@ -98,10 +98,10 @@ public static class MiraStorm
         {
             ShipStatus ship = ShipStatus.Instance;
             // イントロ (役職発表) 中は組み立てない。明けてからフェードインさせる。
-            bool want = Main.MapAtmosphere?.Value == true && ship && GameStates.IsInGame && ship.Type == ShipStatus.MapType.Hq
+            bool want = Main.MapAtmosphere?.Value == true && Il2Direct.Alive(ship) && GameStates.IsInGame && ship.Type == ShipStatus.MapType.Hq
                         && HudManager.InstanceExists && !HudManager.Instance.IsIntroDisplayed;
 
-            if (!_root)
+            if (!Il2Direct.Alive(_root))
             {
                 if (_root is not null) Teardown(); // 船ごと破棄された (ロビー復帰)。背景色を戻す
                 if (!want || ship == _failedShip) return;
