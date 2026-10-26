@@ -77,15 +77,47 @@ internal static class HudManagerPatch
         }
     }
 
+    // il2cpp の物は C# の is で具象型にならないので TryCast。cast は役職の物が替わった時だけ。
+    private static IntPtr ShapeshiftRolePtr;
+    private static ShapeshifterRole ShapeshiftRole;
+    private static IntPtr ShapeshiftTimerButtonPtr;
+    private static int ShapeshiftTimerSec = -1;
+    private static bool ShapeshiftTimerShifting;
+
     private static void WriteShapeshiftTimer(PlayerControl player, AbilityButton button, bool shapeshifting)
     {
-        if (player.Data.Role is not ShapeshifterRole ssrole || player.shapeshifting) return;
+        RoleBehaviour role = player.Data?.Role;
 
-        float timer = shapeshifting ? ssrole.durationSecondsRemaining : ssrole.cooldownSecondsRemaining;
-        if (timer <= 0f) return;
+        if (!Il2Direct.Alive(role) || !Il2Direct.Alive(button) || player.shapeshifting)
+        {
+            ShapeshiftTimerSec = -1;
+            return;
+        }
+
+        if (role.Pointer != ShapeshiftRolePtr)
+        {
+            ShapeshiftRolePtr = role.Pointer;
+            ShapeshiftRole = role.TryCast<ShapeshifterRole>();
+        }
+
+        float timer = ShapeshiftRole == null ? 0f : shapeshifting ? ShapeshiftRole.durationSecondsRemaining : ShapeshiftRole.cooldownSecondsRemaining;
+
+        if (timer <= 0f)
+        {
+            ShapeshiftTimerSec = -1;
+            return;
+        }
+
+        // 秒の表示が変わった時だけ書く (毎 tick の文字列生成と TMP の再レイアウトを避ける)
+        int sec = (int)Math.Ceiling(timer);
+        if (button.Pointer == ShapeshiftTimerButtonPtr && sec == ShapeshiftTimerSec && shapeshifting == ShapeshiftTimerShifting) return;
+
+        ShapeshiftTimerButtonPtr = button.Pointer;
+        ShapeshiftTimerSec = sec;
+        ShapeshiftTimerShifting = shapeshifting;
 
         Color color = shapeshifting ? new Color32(0, 165, 255, 255) : Color.white;
-        button.cooldownTimerText.text = Utils.ColorString(color, Mathf.CeilToInt(timer).ToString());
+        button.cooldownTimerText.text = Utils.ColorString(color, sec.ToString());
         button.cooldownTimerText.gameObject.SetActive(true);
     }
 
