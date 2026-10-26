@@ -120,7 +120,9 @@ $directPatterns = @(
     # 素呼びの CD/ペット/投票キャンセル設定。名前を総当たり (Create\w+) にすると CreateSprite 等まで拾って
     # 偽の衝突を作るので、既知の 3 つだけを名指しする。先頭の負の後読みは `.CreatePetUseSetting(` の
     # チェーン形 ($chainRx の担当) を除くため。
-    @{ Rx = [regex]'(?<![.\w])(?:CreateCDSetting|CreatePetUseSetting|CreateVoteCancellingUseSetting)\s*\(\s*([^,)]+?)\s*[,)]'; Span = 1; AllowBare = $true }
+    @{ Rx = [regex]'(?<![.\w])(?:CreateCDSetting|CreatePetUseSetting|CreateVoteCancellingUseSetting)\s*\(\s*([^,)]+?)\s*[,)]'; Span = 1; AllowBare = $true },
+    # 勝利優先順位の全体設定。中の new IntegerOptionItem(idStart, ...) は引数名なので解決できず、呼び出し側の数値で捕まえる
+    @{ Rx = [regex]'SoloWinOption\.Create\s*\(\s*([^,)]+?)\s*[,)]'; Span = 1; AllowBare = $true }
 )
 # SetupAdtRoleOptions(<id>, ... [, teamSpawnOptions: true]) : 4 (通常) / 8 (team時)
 $adtRx = [regex]'(?:Options\.)?SetupAdtRoleOptions\s*\(\s*([^,]+?)\s*,([^)]*)\)'
