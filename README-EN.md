@@ -157,15 +157,15 @@ We measured "vanilla / BepInEx only / current 0.15.1 dev build" on the same day 
 | Boot time (s) | 5.2 | 7.0 | **4.6** |
 | Time to login complete (s) | 10.0 | 11.9 | **9.9** |
 | Lobby resident memory (MB) | 566 | 697 | **749** |
-| Lobby 1% low (fps) | 57.3 | 56.5 | **55.9** |
-| Lobby frame time p95 (ms) | 17.04 | 17.06 | **17.25** |
+| Lobby 1% low (fps) | 57.3 | 56.5 | **56.9** |
+| Lobby frame time p95 (ms) | 17.04 | 17.06 | **17.12** |
 | In-game resident memory (MB) | 665 | 791 | **827** |
-| In-game 1% low (fps) | 56.9 | 55.6 | **55.0** |
-| In-game frame time p95 (ms) | 17.19 | 17.22 | **17.47** |
+| In-game 1% low (fps) | 56.9 | 55.6 | **56.1** |
+| In-game frame time p95 (ms) | 17.19 | 17.22 | **17.24** |
 
 <p align="center"><img src=".github/perf-chart.png" alt="End K not performance comparison chart" width="90%"></p>
 
-Boot time runs until the main menu starts initializing. Lobby is a private lobby on the official servers with the host alone, in-game is The Skeld, both sampled while standing still (60 fps cap). In-game uses a one-player match for the current build and Freeplay for vanilla and BepInEx only. The current build is a development build compiled with the same configuration as the published one. It still includes the developer notice banner and measurement hooks that the published build leaves out.
+Boot time runs until the main menu starts initializing. Lobby is a private lobby on the official servers with the host alone, in-game is The Skeld, both sampled while standing still (60 fps cap). In-game uses a one-player match for the current build and Freeplay for vanilla and BepInEx only. The current build is a development build compiled with the same configuration as the published one. It still includes the developer notice banner and measurement hooks that the published build leaves out. The current build's 1% low and frame time p95 were measured again in the afternoon of the same day on a build with lighter per-frame work (boot time and memory were not measured again, since nothing affecting them changed).
 
 Earlier boot times were 16.4 s for v0.9.6, 11.1 s for v0.9.7, 4.4 s for the 0.11.1 dev build and 4.7 s for the 0.13.2 dev build (v0.9.6 and v0.9.7 measured 2026-09-05 on the Epic build of 2026.8.18, with vanilla at 5.9 s in that run; 0.11.1 measured 2026-10-03 and 0.13.2 measured 2026-10-16, with vanilla at 5.2 s and 5.3 s). In-game resident memory went down from 985 MB on the 0.11.1 dev build and 891 MB on the 0.13.2 dev build to 827 MB.
 
