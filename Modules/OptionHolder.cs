@@ -2321,6 +2321,26 @@ public static class Options
 
         // Solo win priority (SoloWinOption): a higher value takes the win away from whichever team
         // currently has it, an equal value rides along as an additional winner (ResetAndSetAndChWinner).
+        // Changing the bulk row sets every role's win priority to that value. Only the host writes them;
+        // the row's own sync and save run right after this event, so the new values go out with it.
+        new IntegerOptionItem(707703, "SoloWinOptionBulk", new IntegerValueRule(0, 50, 1), 0, TabGroup.GameSettings)
+            .SetGameMode(CustomGameMode.Standard)
+            .RegisterUpdateValueEvent((_, _, value) =>
+            {
+                if (!AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return;
+
+                foreach (SoloWinOption data in SoloWinOption.AllData.Values)
+                    data.OptionWin.SetValue(value, false, false);
+
+                // SetValue does not redraw number rows, so the open menu (tab and search rows) is redrawn here.
+                foreach (var kv in ModGameOptionsMenu.OptionList)
+                {
+                    OptionItem item = OptionItem.AllOptions[kv.Value];
+                    if (kv.Key && SoloWinOption.AllData.Values.Any(x => x.OptionWin == item))
+                        GameOptionsMenuPatch.ReassertRowValue(kv.Key, item);
+                }
+            });
+
         SoloWinOption.Create(707700, TabGroup.GameSettings, CustomRoles.Impostor);
         SoloWinOption.Create(707701, TabGroup.GameSettings, CustomRoles.Crewmate);
         SoloWinOption.Create(707702, TabGroup.GameSettings, CustomRoles.Jackal);

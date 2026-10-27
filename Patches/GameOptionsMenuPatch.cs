@@ -1096,10 +1096,48 @@ public static class NumberOptionPatch
             OptionItem item = OptionItem.AllOptions[index];
             __instance.TitleText.SetText(item.GetName());
             item.OptionBehaviour = __instance;
+            SetupWinPriorityHelpIcon(__instance, SoloWinOption.AllData.Values.FirstOrDefault(x => x.OptionWin == item));
             return false;
         }
 
         return true;
+    }
+
+    // Win priority rows get the same "?" icon as role rows, explaining what the number does.
+    // The row object can be reused for another option, so a non-priority row hides a leftover icon.
+    private static void SetupWinPriorityHelpIcon(NumberOption option, SoloWinOption data)
+    {
+        Transform template = option.MinusBtn.transform;
+        Transform icon = template.parent.FindChild("WinPriorityHelpIcon");
+
+        if (data == null)
+        {
+            if (icon) icon.gameObject.SetActive(false);
+            return;
+        }
+
+        if (!icon)
+        {
+            icon = ModGameOptionsMenu.Track(Object.Instantiate(template, template.parent, true));
+            icon.name = "WinPriorityHelpIcon";
+        }
+
+        icon.gameObject.SetActive(true);
+
+        var text = icon.GetComponentInChildren<TextMeshPro>();
+        text.SetText("?");
+        text.color = Color.white;
+        icon.FindChild("ButtonSprite").GetComponent<SpriteRenderer>().color = Color.black;
+        var gameOptionButton = icon.GetComponent<GameOptionButton>();
+        gameOptionButton.OnClick = new();
+
+        string key = data.Role == CustomRoles.Kemono ? "SoloWinOptionHelp.Kemono" : "SoloWinOptionHelp";
+        gameOptionButton.OnClick.AddListener((Action)(() => GameSettingMenuPatch.ShowRoleDescription(CustomRoles.NotAssigned, Translator.GetString(key))));
+
+        gameOptionButton.interactableColor = Color.black;
+        gameOptionButton.interactableHoveredColor = new Color32(0, 165, 255, 255);
+        icon.localPosition = template.localPosition + new Vector3(-0.8f, 0f, 0f);
+        icon.SetAsLastSibling();
     }
 
     [HarmonyPatch(nameof(NumberOption.UpdateValue))]
@@ -1598,6 +1636,7 @@ public static class GameSettingMenuPatch
     private static GameObject GameModeToggleButton;
     private static TextMeshPro GameModeToggleText;
     private static CustomRoles DescriptionRole = CustomRoles.NotAssigned;
+    private static string DescriptionText;
     private static GameObject DescriptionPageButton;
     private static TextMeshPro DescriptionPageText;
     private static TextOverflowModes? DescriptionVanillaOverflow;
@@ -1629,7 +1668,7 @@ public static class GameSettingMenuPatch
 
         TextMeshPro tmp = GameSettingMenu.Instance ? GameSettingMenu.Instance.MenuDescriptionText : null;
         int pages = tmp && tmp.textInfo != null ? tmp.textInfo.pageCount : 1;
-        bool show = !GameModeListOpen && DescriptionRole != CustomRoles.NotAssigned && pages > 1;
+        bool show = !GameModeListOpen && DescriptionText != null && pages > 1;
         DescriptionPageButton.SetActive(show);
 
         if (show && DescriptionPageText)
@@ -1657,13 +1696,14 @@ public static class GameSettingMenuPatch
 
         if (GameModeListOpen) SetGameModeListOpen(false);
 
-        if (DescriptionRole == role && tmp.overflowMode == TextOverflowModes.Page)
+        if (DescriptionRole == role && DescriptionText == text && tmp.overflowMode == TextOverflowModes.Page)
         {
             TurnDescriptionPage();
             return;
         }
 
         DescriptionRole = role;
+        DescriptionText = text;
         DescriptionVanillaOverflow ??= tmp.overflowMode;
         tmp.enableAutoSizing = false;
         tmp.fontSize = 1.1f;
@@ -1678,6 +1718,7 @@ public static class GameSettingMenuPatch
     public static void ResetDescriptionPaging(TextMeshPro tmp)
     {
         DescriptionRole = CustomRoles.NotAssigned;
+        DescriptionText = null;
         if (DescriptionPageButton) DescriptionPageButton.SetActive(false);
         if (!tmp) return;
         tmp.pageToDisplay = 1;
@@ -2201,6 +2242,7 @@ public static class GameSettingMenuPatch
             DescriptionPageButton = pager;
             DescriptionPageText = pagerTmp;
             DescriptionRole = CustomRoles.NotAssigned;
+            DescriptionText = null;
             pager.SetActive(false);
 
             SetGameModeListOpen(false);
