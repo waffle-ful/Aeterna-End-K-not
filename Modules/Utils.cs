@@ -439,6 +439,8 @@ public static class Utils
 
     private static void TargetDies(PlayerControl killer, PlayerControl target)
     {
+        ShadowPair.OnAnyoneKilled(target);
+
         CustomRoles targetRole = target.GetCustomRole();
 
         foreach (PlayerControl seer in Main.CachedAllPlayerControls())
@@ -1171,6 +1173,9 @@ public static class Utils
             case CustomRoles.Torpedo:
             case CustomRoles.Vega:
             case CustomRoles.Altair:
+            case CustomRoles.Kemono:
+            case CustomRoles.Furry:
+            case CustomRoles.Emptiness:
                 hasTasks = false;
                 break;
             case CustomRoles.Amnesiac:

@@ -2,7 +2,7 @@
 
 [English](ROLES-EN.md) ・ [← README に戻る](README.md)
 
-実装済みは合計 **698 役職**（陣営別役職548 + サブ役職・アドオン150）。陣営ごとに整理しています。
+実装済みは合計 **703 役職**（陣営別役職553 + サブ役職・アドオン150）。陣営ごとに整理しています。
 
 ここに並ぶ役職の大半は、ベースである [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) や TownOfHost 系列といった先行 Mod から来ています。実装をそのまま引き継いだものと、参考にして書き直したものが混ざっています。役職名の下の「from ○○」は、その役職を最初に実装した Mod です。各 Mod への謝辞は [README のクレジット](README.md#クレジット)にまとめています。
 
@@ -12,9 +12,9 @@
 | クルーメイト | 179 (ヴァニラ6 + リメイク7 + カスタム166) |
 | ニュートラル | 141 |
 | カヴン (Coven) | 21 |
-| コンビネーション役職 | 4 (2人1組) |
+| コンビネーション役職 | 8 (2人1組) |
 | ゲームモード専用 | 28 |
-| その他 | 2 (GM / Convict) |
+| その他 | 3 (GM / Convict / Emptiness) |
 | サブ役職（アドオン） | 150 |
 
 各役職の効果や設定はゲーム内で `/r <役職名>` または `/myrole` で確認できます。
@@ -170,11 +170,12 @@
 | リーパー (Reaper)<br><sub>From:EndlessHostRoles</sub> | 死神 (Death)<br><sub>From:EndlessHostRoles</sub> | 女神 (Goddess)<br><sub>From:EndlessHostRoles</sub> | 夢織師 (Dreamweaver)<br><sub>From:EndlessHostRoles</sub> |
 | シャドウ (Shadow)<br><sub>From:EndlessHostRoles</sub> |  |  |  |
 
-### コンビネーション役職 (4)
+### コンビネーション役職 (8)
 
 |   |   |   |   |
 |---|---|---|---|
 | ドライバー (Driver)<br><sub>From:TownOfHost-K</sub> | ブレイド (Braid)<br><sub>From:TownOfHost-K</sub> | 織姫 (Vega)<br><sub>From:TownOfHost-K</sub> | 彦星 (Altair)<br><sub>From:TownOfHost-K</sub> |
+| 光 (LightPair)<br><sub>From:TownOfHost-Kemo</sub> | 影 (ShadowPair)<br><sub>From:TownOfHost-Kemo</sub> | ケモノ (Kemono)<br><sub>From:TownOfHost-Kemo</sub> | ファーリー (Furry)<br><sub>From:TownOfHost-Kemo</sub> |
 
 ### ゲームモード専用 (28)
 
@@ -188,11 +189,11 @@
 | プレイヤー (Potato)<br><sub>From:MoreGamemodes</sub> | ベッドウォーズ (BedWarsPlayer)<br><sub>From:EndlessHostRoles</sub> | ベンター (Venter)<br><sub>From:EndlessHostRoles</sub> | ルーム ラッシュ (RRPlayer)<br><sub>From:EndlessHostRoles</sub> |
 | ロケーター (Locator)<br><sub>From:EndlessHostRoles</sub> | 旗の捕獲者 (CTFPlayer)<br><sub>From:EndlessHostRoles</sub> | 自然災害 (NDPlayer)<br><sub>From:EndlessHostRoles</sub> | ディスガイザー (Disguiser)<br><sub>From:EndlessHostRoles</sub> |
 
-### その他 (2)
+### その他 (3)
 
 |   |   |   |   |
 |---|---|---|---|
-| ゲームマスター (GM)<br><sub>From:TOR GM Edition</sub> | 犯罪者 (Convict)<br><sub>From:TownOfHost E</sub> |  |  |
+| ゲームマスター (GM)<br><sub>From:TOR GM Edition</sub> | 犯罪者 (Convict)<br><sub>From:TownOfHost E</sub> | 空虚者 (Emptiness)<br><sub>From:TownOfHost-K</sub> |  |
 
 ### サブ役職・アドオン (150)
 

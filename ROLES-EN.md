@@ -2,7 +2,7 @@
 
 [日本語](ROLES.md) ・ [← Back to README](README-EN.md)
 
-**698 roles in total** (548 faction roles + 150 sub-roles/add-ons), organized by faction.
+**703 roles in total** (553 faction roles + 150 sub-roles/add-ons), organized by faction.
 
 Most of the roles listed here come from the base mod [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) and earlier mods in the scene such as the TownOfHost lineage. Some carry over the original implementation; others were rewritten with reference to it. The "from …" under each role names the mod that first implemented it. Credits for each project are collected in the [README](README-EN.md#credits).
 
@@ -12,9 +12,9 @@ Most of the roles listed here come from the base mod [Endless Host Roles](https:
 | Crewmate | 179 (vanilla 6 + remake 7 + custom 166) |
 | Neutral | 141 |
 | Coven | 21 |
-| Combination roles | 4 (dealt in pairs) |
+| Combination roles | 8 (dealt in pairs) |
 | Game mode exclusive | 28 |
-| Other | 2 (GM / Convict) |
+| Other | 3 (GM / Convict / Emptiness) |
 | Sub-roles (add-ons) | 150 |
 
 Use `/r <role name>` or `/myrole` in-game to check each role's effects and settings.
@@ -170,11 +170,12 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Reaper<br><sub>From:EndlessHostRoles</sub> | Death<br><sub>From:EndlessHostRoles</sub> | Goddess<br><sub>From:EndlessHostRoles</sub> | Dreamweaver<br><sub>From:EndlessHostRoles</sub> |
 | Shadow<br><sub>From:EndlessHostRoles</sub> |  |  |  |
 
-### Combination roles (4)
+### Combination roles (8)
 
 |   |   |   |   |
 |---|---|---|---|
 | Driver<br><sub>From:TownOfHost-K</sub> | Braid<br><sub>From:TownOfHost-K</sub> | Vega<br><sub>From:TownOfHost-K</sub> | Altair<br><sub>From:TownOfHost-K</sub> |
+| Light<br><sub>From:TownOfHost-Kemo</sub> | Shadow<br><sub>From:TownOfHost-Kemo</sub> | Kemono<br><sub>From:TownOfHost-Kemo</sub> | Furry<br><sub>From:TownOfHost-Kemo</sub> |
 
 ### Game mode exclusive (28)
 
@@ -188,11 +189,11 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Potato<br><sub>From:MoreGamemodes</sub> | BedWarsPlayer<br><sub>From:EndlessHostRoles</sub> | Venter<br><sub>From:EndlessHostRoles</sub> | RRPlayer<br><sub>From:EndlessHostRoles</sub> |
 | Locator<br><sub>From:EndlessHostRoles</sub> | CTFPlayer<br><sub>From:EndlessHostRoles</sub> | NDPlayer<br><sub>From:EndlessHostRoles</sub> | Disguiser<br><sub>From:EndlessHostRoles</sub> |
 
-### Other (2)
+### Other (3)
 
 |   |   |   |   |
 |---|---|---|---|
-| GM<br><sub>From:TOR GM Edition</sub> | Convict<br><sub>From:TownOfHost E</sub> |  |  |
+| GM<br><sub>From:TOR GM Edition</sub> | Convict<br><sub>From:TownOfHost E</sub> | Emptiness<br><sub>From:TownOfHost-K</sub> |  |
 
 ### Sub-roles / Add-ons (150)
 
