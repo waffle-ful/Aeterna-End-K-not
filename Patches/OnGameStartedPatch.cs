@@ -825,11 +825,13 @@ internal static class StartGameHostPatch
         while (true)
         {
             var flag = true;
-            var num = 10;
+            // 本編の 10 秒 (Airship/Fungle 15 秒) では、マップの読み込みが遅い端末が読み込み中に切られる
+            // (Android 系で開始受信から読み込み完了まで 12 秒超を実測)。全員揃えば即座に抜けるので長めに待つ
+            var num = 25;
             var totalSeconds = (float)(DateTime.Now - start).TotalSeconds;
 
             if (GameOptionsManager.Instance.CurrentGameOptions.MapId == 5 || GameOptionsManager.Instance.CurrentGameOptions.MapId == 4)
-                num = 15;
+                num = 30;
 
             var clientsReady = 0;
             int allClientsCount = AUClient.allClients.Count;
