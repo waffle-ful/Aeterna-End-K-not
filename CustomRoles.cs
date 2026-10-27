@@ -646,6 +646,13 @@ public enum CustomRoles
     // Crewmate (appended)
     SheriffHadouHo,
 
+    // Combination roles (appended after the existing main-role block so no persisted id shifts)
+    LightPair,
+    ShadowPair,
+    Kemono,
+    Furry,
+    Emptiness,
+
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)
     NotAssigned = 1000,
     Absorber,

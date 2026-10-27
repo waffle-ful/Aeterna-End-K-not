@@ -381,6 +381,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[TownOfHost-Shell](https://github.com/sijimi2222/TownOfHost-Shell)** (TORAKUNNOIE, GPL-3.0) — source of the Nova role
 - **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions repo](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion) — split RPC packs, meeting screen handling
 - **[TownOfHost-hamo](https://github.com/rar006/TownOfHost-hamo)** (rar006, GPL-3.0) — coming-out feature (`/co`, `/aco`, `/colist`)
+- **TownOfHost-Kemo** — the idea behind the roles Light, Shadow, Kemono and Furry
 - **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper) — a Town Of Host derivative adding its own roles
 - **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975) — zoom
 - **[UchuAddon](https://github.com/TeamUchuaddon/UchuAddon)** (TeamUchuaddon, GPL-3.0) — the Nova role

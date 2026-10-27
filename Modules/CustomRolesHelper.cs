@@ -491,6 +491,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Crewpostor => CustomRoles.Engineer,
                 CustomRoles.Hypocrite => CustomRoles.Crewmate,
                 CustomRoles.Braid => Driver.BraidCanVent.GetBool() ? CustomRoles.Engineer : CustomRoles.Crewmate,
+                CustomRoles.Kemono => CustomRoles.Engineer,
                 CustomRoles.Cherokious => CustomRoles.Engineer,
                 CustomRoles.Pawn => CustomRoles.Crewmate,
                 CustomRoles.Observer => CustomRoles.Crewmate,
@@ -787,6 +788,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Replay => RoleTypes.Phantom,
                 CustomRoles.Vega => RoleTypes.Impostor,
                 CustomRoles.Altair => RoleTypes.Impostor,
+                CustomRoles.Furry => RoleTypes.Impostor,
 
                 CustomRoles.CovenLeader => RoleTypes.Impostor,
                 CustomRoles.SpellCaster => RoleTypes.Impostor,
@@ -1497,6 +1499,8 @@ internal static class CustomRolesHelper
             {
                 CustomRoles.NecroGuesser => RoleOptionType.Neutral_Benign,
                 CustomRoles.Opportunist => RoleOptionType.Neutral_Benign,
+                CustomRoles.Kemono => RoleOptionType.Neutral_Benign,
+                CustomRoles.Furry => RoleOptionType.Neutral_Benign,
                 CustomRoles.Maguro => RoleOptionType.Neutral_Benign,
                 CustomRoles.Supernova => RoleOptionType.Neutral_Benign,
                 CustomRoles.Safecracker => RoleOptionType.Neutral_Benign,
@@ -2209,6 +2213,9 @@ internal static class CustomRolesHelper
                 CustomRoles.Arsonist => Arsonist.ArsonistKeepsGameGoing.GetBool() ? CountTypes.Arsonist : CountTypes.Crew,
                 CustomRoles.Remotekiller => CountTypes.Remotekiller,
                 CustomRoles.Altair => CountTypes.Vega,
+                CustomRoles.Kemono => CountTypes.Crew,
+                CustomRoles.Furry => CountTypes.Crew,
+                CustomRoles.Emptiness => CountTypes.OutOfGame,
                 // 原典はいずれも「ニュートラルの既定 = クルーとして数える」。OutOfGame にすると
                 // 勝敗計算から丸ごと消えてしまい、インポスターは殺さずに勝てるうえ、
                 // この役職が最後の1人になると「誰も勝たない」で試合が終わる。

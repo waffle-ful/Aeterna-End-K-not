@@ -1101,6 +1101,11 @@ public class Main : BasePlugin
                 { CustomRoles.Braid, "#ff7f50" },
                 { CustomRoles.Vega, "#f1d9d9" },
                 { CustomRoles.Altair, "#b0c4de" },
+                { CustomRoles.LightPair, "#fff2a8" },
+                { CustomRoles.ShadowPair, "#7a6a9c" },
+                { CustomRoles.Kemono, "#ffb86b" },
+                { CustomRoles.Furry, "#d9695a" },
+                { CustomRoles.Emptiness, "#221d26" },
                 { CustomRoles.Virus, "#2E8B57" },
                 { CustomRoles.Investigator, "#BA55D3" },
                 { CustomRoles.Pursuer, "#617218" },
@@ -1773,6 +1778,7 @@ public enum CustomWinner
     Phantasm = CustomRoles.Phantasm,
     Remotekiller = CustomRoles.Remotekiller,
     Vega = CustomRoles.Vega,
+    Furry = CustomRoles.Furry,
     Strawdoll = CustomRoles.Strawdoll,
     CurseMaker = CustomRoles.CurseMaker,
     Missioneer = CustomRoles.Missioneer,
@@ -1859,6 +1865,7 @@ public enum AdditionalWinners
     Faction = CustomRoles.Faction,
     LastNeutral = CustomRoles.LastNeutral,
     Vega = CustomRoles.Vega,
+    Kemono = CustomRoles.Kemono,
     Altair = CustomRoles.Altair,
 
     // Wave 7: EKR win_join の便乗勝者の表示帰属。値は「かたせた側の

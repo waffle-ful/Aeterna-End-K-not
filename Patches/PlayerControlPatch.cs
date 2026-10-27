@@ -3011,6 +3011,8 @@ internal static class EnterVentPatch
 
         Chef.SpitOutFood(pc);
 
+        ShadowPair.OnAnyoneEnterVent(pc, __instance);
+
         Main.PlayerStates[pc.PlayerId].Role.OnEnterVent(pc, __instance);
         
         if (Options.OverrideVisionInVents.GetBool() && Options.InVentVision.ContainsKey(pc.GetTeam()))

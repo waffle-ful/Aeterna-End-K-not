@@ -274,6 +274,10 @@ internal static class GameEndChecker
                             WinnerIds.Add(Romantic.PartnerId);
                             AdditionalWinnerTeams.Add((AdditionalWinners)role);
                             break;
+                        // 空虚者は勝利条件を持たないので、クルー扱いで集められても勝者に残さない
+                        case CustomRoles.Emptiness:
+                            WinnerIds.Remove(pc.PlayerId);
+                            break;
                         // 攻撃されなかった猫がクルーと勝つ設定の時は下の追加勝利の分岐へ通す
                         case CustomRoles.SchrodingersCat when !pc.IsConverted() && !(WinnerTeam == CustomWinner.Crewmate && SchrodingersCat.WinsWithCrewIfNotAttacked.GetBool()):
                             WinnerIds.Remove(pc.PlayerId);
@@ -295,6 +299,7 @@ internal static class GameEndChecker
                             WinnerIds.Add(pc.PlayerId);
                             break;
                         case CustomRoles.Opportunist when pc.IsAlive():
+                        case CustomRoles.Kemono when pc.IsAlive() && !Kemono.Captured:
                         case CustomRoles.Maguro when pc.IsAlive():
                         case CustomRoles.Pursuer when pc.IsAlive() && WinnerTeam is not CustomWinner.Jester and not CustomWinner.Lovers and not CustomWinner.Terrorist and not CustomWinner.Executioner and not CustomWinner.Collector and not CustomWinner.Innocent and not CustomWinner.Youtuber:
                         case CustomRoles.Sunnyboy when !pc.IsAlive():
@@ -737,6 +742,8 @@ internal static class GameEndChecker
                 case CustomRoles.Specter when state.TaskState.RemainingTasksCount <= 0 && state.IsDead:
                 case CustomRoles.VengefulRomantic when VengefulRomantic.HasKilledKiller:
                 case CustomRoles.Opportunist when !state.IsDead:
+                case CustomRoles.Kemono when !state.IsDead && !Kemono.Captured:
+                case CustomRoles.Furry when !state.IsDead && Kemono.Captured:
                 case CustomRoles.Maguro when !state.IsDead:
                 case CustomRoles.Supernova when !state.IsDead:
                 case CustomRoles.Sunnyboy when state.IsDead:

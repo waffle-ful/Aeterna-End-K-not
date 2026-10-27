@@ -383,6 +383,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[TownOfHost-Shell](https://github.com/sijimi2222/TownOfHost-Shell)** (TORAKUNNOIE、GPL-3.0) — 役職「ノヴァ」の移植元
 - **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions 版](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion) — RPC パケットの分割送信、会議画面まわりの処理
 - **[TownOfHost-hamo](https://github.com/rar006/TownOfHost-hamo)** (rar006、GPL-3.0) — カミングアウト機能 (`/co` `/aco` `/colist`)
+- **TownOfHost-Kemo** — 役職「光」「影」「ケモノ」「ファーリー」のアイデア
 - **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper) — Town Of Host に独自役職を追加した Mod
 - **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975) — ズーム
 - **[UchuAddon](https://github.com/TeamUchuaddon/UchuAddon)** (TeamUchuaddon、GPL-3.0) — 役職「ノヴァ」

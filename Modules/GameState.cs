@@ -401,6 +401,14 @@ public class PlayerState(byte playerId)
     {
         IsDead = true;
         Main.ForceRebuildCachesPlayerControls();
+
+        // コンビ役職の後追い・変化は、終了判定より前に相方の死亡まで済ませる (片方だけの状態で勝敗が決まらないように)
+        if (AmongUsClient.Instance.AmHost)
+        {
+            LightPair.OnAnyoneSetDead(PlayerId);
+            Kemono.OnAnyoneSetDead(PlayerId);
+        }
+
         GameEndChecker.ForceCheckEnd();
 
         if (AmongUsClient.Instance.AmHost)
