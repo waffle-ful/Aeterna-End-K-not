@@ -259,7 +259,7 @@ Rename `winhttp.dll` in your `Among Us` folder to `winhttp.dll.disabled`. The ga
 
 You can host from your phone too. The game itself stays unmodified; the launcher starts it with the mod loaded.
 
-The launcher is **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** by All-Of-Us-Mods (GPL-3.0), rebranded and packaged as its own APK; most of its code is FusionCore's. End K not's changes are small: bundling End K not, fixes for x86_64 emulators, and a few others (details in [`Android/Launcher/UPSTREAM.md`](./Android/Launcher/UPSTREAM.md)).
+The launcher is **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** by XtraCube / All-Of-Us-Mods (GPL-3.0), rebranded and packaged as its own APK; most of its code is FusionCore's. End K not's changes are small: bundling End K not, fixes for x86_64 emulators, and a few others (details in [`Android/Launcher/UPSTREAM.md`](./Android/Launcher/UPSTREAM.md)).
 
 1. Install the official store version of Among Us on an Android 8.1+ arm64 device
 2. **[Download `EndKnot-<version>_Android.apk`](../../releases/latest)** and install it (you'll need to allow installs from unknown sources)
@@ -340,15 +340,15 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[ExtraRolesAmongUs](https://github.com/NotHunter101/ExtraRolesAmongUs)** (NotHunter101, GPL-3.0) — the mod the Medic came from
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — Airship patches
 - **[Foolers Mod](https://github.com/MengTube/Foolers-Mod)** (MengTube, GPL-3.0) — the mod the Terrorist came from
-- **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (All-Of-Us-Mods, GPL-3.0) — most of the Android launcher's code (the launcher is a rebranded FusionCore); hook handling for hosts that run it under translation (x86_64 emulators)
+- **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (XtraCube / All-Of-Us-Mods, GPL-3.0) — most of the Android launcher's code (the launcher is a rebranded FusionCore); hook handling for hosts that run it under translation (x86_64 emulators)
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754, MIT) — the idea of isolating cache domains with CPU Sets (the `CpuSetsMode` setting); our code is written directly against the Win32 API
 - **ImaMapleTree / 단풍잎 / Tealeaf** — ability activation via the pet button
 - **[Jester](https://github.com/Maartii/Jester)** (Maartii) — the mod the Jester came from
 - **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — settings-conflict detection with host warnings, whitelist join restriction
 - **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj, GPL-3.0) — player position dots on the minimap
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot, GPL-3.0) — custom region installer
-- **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods, LGPL-2.1) — UI sprites (two next-page buttons, two checkmarks)
-- **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — Custom Net Objects (CNO), chat control and clearing, player-control helper code
+- **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods, LGPL-2.1) — UI sprites (two next-page buttons, two checkmarks), the role info tab panel
+- **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — Custom Net Objects (CNO), chat control and clearing, player-control helper code, vent operation patches, vote-kick handling, online permission checks
 - **[More Roles Plus](https://github.com/haru03741-glitch/More-Roles-Plus)** (haru03741-glitch, GPL-3.0) — copying the ability button into the bottom-right grid (freeplay spawn editor)
 - **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** / [source code (Nebula-Public)](https://github.com/Dolly1016/Nebula-Public) (Dolly1016 et al., GPL-3.0; NebulaAPI is LGPL-3.0) — disabling incremental GC and running GC ahead of time; a mod with many roles of its own and its own API
 - **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor) — modded handshake, compiler-generated object and state machine wrappers, disabling the 5s timeout on custom servers
@@ -364,14 +364,15 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **TOR_GM_Haoming_Edition** (haoming37) — a TheOtherRoles-GM derivative; the mod the Schrodinger's Cat and Evil Tracker came from
 - **[TOHEX / TONEX](https://github.com/TOHEX-Official/TownOfHostEdited-Xi)** — a host mod in the Town Of Host Edited lineage
 - **[TooManyRolesMods](https://github.com/Hardel-DW/TooManyRolesMods)** (Hardel-DW, GPL-3.0) — the mod the Time Master came from
-- **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers, GPL-3.0) — dleks map selection, kill button cooldown display
-- **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 et al.) — the root of the whole lineage; sabotage system handling
+- **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers, GPL-3.0) — dleks map selection, kill button cooldown display, HUD startup handling, the role info tab panel
+- **[TouseefX](https://github.com/TouseefX)** — patch that prevents a crash when a destroyed button is clicked
+- **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 et al.) — the root of the whole lineage; version check, option saving, client option items, random spawn, sabotage system / sabotage button / moving platform handling
 - **[Town Of Host-H](https://github.com/Hyz-sui/TownOfHost-H)** (Hyz-sui) — a Town Of Host derivative host mod
 - **[Town Of Host-K](https://github.com/KYMario/TownOfHost-K)** (KYMario et al., GPL-3.0) — source of many ported roles, streaming-support features, the official-server packet-splitting safety net, device usage time limits
 - **[Town Of Host Re-Edited](https://github.com/Loonie-Toons/)** — EHR's fork origin
 - **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** (AsumuAkaguma, GPL-3.0) — BGM customization, chat character-type restriction (WordLimit), meeting start reason notification
 - **[Town Of Host_Y](https://github.com/Yumenopai/TownOfHost_Y)** (Yumenopai) — some roles, settings UI, zoom handling
-- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network team, GPL-3.0) — friend-code matching on join; a host mod with a large set of original roles
+- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network team, GPL-3.0) — friend-code matching on join, meeting/ship/game-start/lobby patches, parts of the anti-cheat, the preset button and search bar in the settings menu (Drakos); a host mod with a large set of original roles
 - **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** / [TownOfHostEdited](https://github.com/KARPED1EM/TownOfHostEdited) / [TownOfNext](https://github.com/TownOfNext/TownOfNext) (KARPED1EM, GPL-3.0) — EHR's predecessor in the lineage; the in-game role info menu
 - **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq, GPL-3.0) — vent network map display (via [TownOfNext](https://github.com/TownOfNext/TownOfNext), [TOU-Mira](https://github.com/AU-Avengers/TOU-Mira) and [MalumMenu](https://github.com/scp222thj/MalumMenu))
 - **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024) — reactor meltdown boost
@@ -388,7 +389,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975) — zoom
 - **[UchuAddon](https://github.com/TeamUchuaddon/UchuAddon)** (TeamUchuaddon, GPL-3.0) — the Nova role
 - **[UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)** (NeighTools, LGPL-2.1) — `winhttp.dll` / `doorstop_config.ini` used for packaging
-- **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq, GPL-3.0) — a client mod that improves vanilla quality of life
+- **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq, GPL-3.0) — meeting name plate cosmetics and meeting start patches; a client mod that improves vanilla quality of life
 
 ### Thanks to the developers and translators
 
@@ -413,6 +414,7 @@ Some components are embedded into `EndKnot.dll`, others ship inside the release 
 - NVorbis (MIT) — Ogg Vorbis decoding
 - NLayer (MIT) — MP3 decoding
 - BepInEx / Unity Doorstop (LGPL-2.1), Il2CppInterop (LGPL-3.0) — the mod loading stack
+- BepInEx Fusion (LGPL-2.1), Il2CppInterop Fusion (LGPL-3.0) (All-Of-Us-Mods) — the loading stack bundled in the Android launcher
 - HarmonyX / MonoMod / Mono.Cecil / AsmResolver / Cpp2IL / Iced and others (MIT), Dobby (Apache-2.0) — libraries used by the loading stack
 - .NET runtime (MIT) — the runtime the mod runs on
 - Python with its packages, three.js and others — the AI commentary companion

@@ -46,7 +46,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)�
 | MiraAPI (UI sprites) | All-Of-Us-Mods — [MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI) | LGPL-2.1 | `Resources/Images/`: `ActiveNextButton.png`, `InactiveNextButton.png`, `Checkmark.png`, `CheckMarkBox.png` |
 | TownOfHost-Pko | satokazoku et al. — [TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko) | GPL-3.0 | source, adapted in `Patches/NumericOptionInputPatch.cs` and `Modules/ConsecutiveJoinKick.cs` |
 | Lotus (LotusContinued) | Lotus-AU — [LotusContinued](https://github.com/Lotus-AU/LotusContinued) | GPL-3.0 | source, adapted in `Modules/WhitelistManager.cs` |
-| FusionCore | All-Of-Us-Mods — [FusionCore](https://github.com/All-Of-Us-Mods/FusionCore) | GPL-3.0 | source, `Android/Launcher/` (git subtree, rebranded Android launcher) |
+| FusionCore | XtraCube / All-Of-Us-Mods — [FusionCore](https://github.com/All-Of-Us-Mods/FusionCore) | GPL-3.0 | source, `Android/Launcher/` (git subtree, rebranded Android launcher) |
 | BepInEx Fusion | All-Of-Us-Mods — [BepInExFusion](https://github.com/All-Of-Us-Mods/BepInExFusion) | LGPL-2.1 | bundled in the launcher APK (`Android/Launcher/fusionApp/src/main/assets/BepInEx-arm64.zip`) |
 | Il2CppInterop Fusion | All-Of-Us-Mods — [Il2CppInteropFusion](https://github.com/All-Of-Us-Mods/Il2CppInteropFusion) | LGPL-3.0 | bundled in the launcher APK (`Android/Launcher/fusionApp/src/main/assets/BepInEx-arm64.zip`) |
 | .NET runtime | Microsoft & .NET Foundation — [dotnet/runtime](https://github.com/dotnet/runtime) | MIT | bundled in the launcher APK (`Android/Launcher/fusionApp/src/main/assets/dotnet-arm64.zip`, `jniLibs/arm64-v8a/`; `System.Diagnostics.Process.dll` patched) |
@@ -404,12 +404,12 @@ and the following packages, redistributed unmodified. Each package's license fil
 ## FusionCore (Android launcher)
 
 The Android launcher in `Android/Launcher/` is a `git subtree` of
-[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore) by All-Of-Us-Mods (GPL-3.0), with
+[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore) by XtraCube / All-Of-Us-Mods (GPL-3.0), with
 branding, storage root and target selection changed for End K not. It stays under GPL-3.0, the
 same license as End K not; the full text is in [`Android/Launcher/LICENSE`](./Android/Launcher/LICENSE)
 and the tracked upstream commit is recorded in [`Android/Launcher/UPSTREAM.md`](./Android/Launcher/UPSTREAM.md).
 
-`Android/Launcher/` の Android ランチャーは All-Of-Us-Mods の
+`Android/Launcher/` の Android ランチャーは XtraCube / All-Of-Us-Mods の
 [FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)（GPL-3.0）を git subtree として取り込み、
 ブランド表記・保存先フォルダ・起動対象を End K not 向けに変更したものです。ライセンスは本体と同じ GPL-3.0 です。
 

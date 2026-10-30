@@ -260,7 +260,7 @@ zip に BepInEx 本体・設定ファイル・カスタムリージョン追加 
 
 スマホでもホストできます。ゲーム本体は改造せず、ランチャーが Mod を読み込んだ状態で起動します。
 
-このランチャーは All-Of-Us-Mods の **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)**（GPL-3.0）を名前と見た目だけ変えて APK にしたもので、コードの大部分は FusionCore のものです。End K not 側の変更は、End K not の同梱と x86_64 エミュレータ向けの修正などごく一部です（詳細は [`Android/Launcher/UPSTREAM.md`](./Android/Launcher/UPSTREAM.md)）。
+このランチャーは XtraCube / All-Of-Us-Mods の **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)**（GPL-3.0）を名前と見た目だけ変えて APK にしたもので、コードの大部分は FusionCore のものです。End K not 側の変更は、End K not の同梱と x86_64 エミュレータ向けの修正などごく一部です（詳細は [`Android/Launcher/UPSTREAM.md`](./Android/Launcher/UPSTREAM.md)）。
 
 1. Android 8.1 以上・arm64 の端末に、公式ストア版の Among Us を入れておく
 2. **[`EndKnot-<バージョン>_Android.apk` をダウンロード](../../releases/latest)** してインストール（提供元不明のアプリの許可が必要です）
@@ -342,15 +342,15 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[ExtraRolesAmongUs](https://github.com/NotHunter101/ExtraRolesAmongUs)** (NotHunter101、GPL-3.0) — 「メディック」の元になった Mod
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — エアシップ関連のパッチ
 - **[Foolers Mod](https://github.com/MengTube/Foolers-Mod)** (MengTube、GPL-3.0) — 「テロリスト」の元になった Mod
-- **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (All-Of-Us-Mods、GPL-3.0) — Android ランチャーのコードの大部分 (ランチャーは FusionCore を名前と見た目だけ変えたもの)、翻訳実行するホスト (x86_64 エミュレータ) 向けのフックの扱い
+- **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (XtraCube / All-Of-Us-Mods、GPL-3.0) — Android ランチャーのコードの大部分 (ランチャーは FusionCore を名前と見た目だけ変えたもの)、翻訳実行するホスト (x86_64 エミュレータ) 向けのフックの扱い
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754、MIT) — CPU Sets によるキャッシュドメイン隔離の発想 (`CpuSetsMode` 設定)。コードは Win32 API から独自実装
 - **ImaMapleTree / 단풍잎 / Tealeaf** — ペットボタンによる能力発動の処理
 - **[Jester](https://github.com/Maartii/Jester)** (Maartii) — 「ジェスター」の元になった Mod
 - **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — 設定矛盾の検出とホスト警告、ホワイトリスト入室制限
 - **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj、GPL-3.0) — ミニマップ上のプレイヤー位置表示
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot、GPL-3.0) — カスタムリージョンの追加
-- **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods、LGPL-2.1) — UI スプライト（ページ送りボタン 2 点・チェックマーク 2 点）
-- **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — カスタムネットオブジェクト (CNO)、チャット制御と消去、プレイヤー操作まわりの補助処理
+- **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods、LGPL-2.1) — UI スプライト（ページ送りボタン 2 点・チェックマーク 2 点）、役職情報タブのパネル
+- **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — カスタムネットオブジェクト (CNO)、チャット制御と消去、プレイヤー操作まわりの補助処理、ベントの出入りまわりのパッチ、投票キックの処理、オンライン権限の確認
 - **[More Roles Plus](https://github.com/haru03741-glitch/More-Roles-Plus)** (haru03741-glitch、GPL-3.0) — 能力ボタンを複製して右下に並べる処理（フリープレイのスポーン地点エディタ）
 - **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** / [ソースコード (Nebula-Public)](https://github.com/Dolly1016/Nebula-Public) (Dolly1016 他、GPL-3.0 / NebulaAPI は LGPL-3.0) — incremental GC の無効化と GC の先撃ち。独自役職と独自 API を多数持つ Mod
 - **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor) — modded ハンドシェイク、コンパイラ生成オブジェクト・ステートマシンのラッパー、カスタムサーバーの 5 秒タイムアウト解除
@@ -366,14 +366,15 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **TOR_GM_Haoming_Edition** (haoming37) — TheOtherRoles-GM の派生 Mod。「シュレディンガーの猫」「イビルトラッカー」の元になった Mod
 - **[TOHEX / TONEX](https://github.com/TOHEX-Official/TownOfHostEdited-Xi)** — Town Of Host Edited 系列のホスト Mod
 - **[TooManyRolesMods](https://github.com/Hardel-DW/TooManyRolesMods)** (Hardel-DW、GPL-3.0) — 「タイムマスター」の元になった Mod
-- **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers、GPL-3.0) — dleks マップ選択、キルボタンのクールダウン表示
-- **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 他) — TOH 系列の祖。サボタージュ系システムまわりの処理
+- **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers、GPL-3.0) — dleks マップ選択、キルボタンのクールダウン表示、HUD の起動時の処理、役職情報タブのパネル
+- **[TouseefX](https://github.com/TouseefX)** — 破棄済みのボタンを押した時のクラッシュを防ぐパッチ
+- **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 他) — TOH 系列の祖。バージョン確認、設定の保存、クライアント設定の項目、ランダムスポーン、サボタージュ系システム・サボタージュボタン・動く足場まわりの処理
 - **[Town Of Host-H](https://github.com/Hyz-sui/TownOfHost-H)** (Hyz-sui) — Town Of Host の派生ホスト Mod
 - **[Town Of Host-K](https://github.com/KYMario/TownOfHost-K)** (KYMario 他、GPL-3.0) — 多くの役職の移植元、配信サポート機能、公式鯖パケット分割対策、デバイス使用時間の上限
 - **[Town Of Host Re-Edited](https://github.com/Loonie-Toons/)** — EHR の fork 元
 - **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** (AsumuAkaguma、GPL-3.0) — BGM カスタマイズ機能、チャット文字種制限 (WordLimit)、会議開始理由の通知
 - **[Town Of Host_Y](https://github.com/Yumenopai/TownOfHost_Y)** (Yumenopai) — 一部の役職、設定 UI、ズームまわりの処理
-- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network 開発チーム、GPL-3.0) — 入室時のフレンドコード照合。独自役職を多数持つホスト Mod
+- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network 開発チーム、GPL-3.0) — 入室時のフレンドコード照合、会議・船・試合開始・ロビーまわりのパッチ、アンチチートの一部、設定画面のプリセットボタンと検索欄（Drakos）。独自役職を多数持つホスト Mod
 - **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** / [TownOfHostEdited](https://github.com/KARPED1EM/TownOfHostEdited) / [TownOfNext](https://github.com/TownOfNext/TownOfNext) (KARPED1EM、GPL-3.0) — EHR の系譜上の前身。ゲーム中の役職情報メニュー
 - **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq、GPL-3.0) — ベント接続網の地図表示（[TownOfNext](https://github.com/TownOfNext/TownOfNext)・[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)・[MalumMenu](https://github.com/scp222thj/MalumMenu) 由来）
 - **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024) — 原子炉メルトダウンの加速処理
@@ -390,7 +391,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975) — ズーム
 - **[UchuAddon](https://github.com/TeamUchuaddon/UchuAddon)** (TeamUchuaddon、GPL-3.0) — 役職「ノヴァ」
 - **[UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)** (NeighTools、LGPL-2.1) — 配布パッケージの `winhttp.dll` / `doorstop_config.ini`
-- **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq、GPL-3.0) — バニラの使い勝手を改善するクライアント Mod
+- **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq、GPL-3.0) — 会議画面の名札の見た目と会議開始時のパッチ。バニラの使い勝手を改善するクライアント Mod
 
 ### 開発者・翻訳者への謝辞
 
@@ -415,6 +416,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - NVorbis (MIT) — Ogg Vorbis のデコード
 - NLayer (MIT) — MP3 のデコード
 - BepInEx / Unity Doorstop (LGPL-2.1)・Il2CppInterop (LGPL-3.0) — Mod の読み込み基盤
+- BepInEx Fusion (LGPL-2.1)・Il2CppInterop Fusion (LGPL-3.0) (All-Of-Us-Mods) — Android ランチャーに同梱する読み込み基盤
 - HarmonyX / MonoMod / Mono.Cecil / AsmResolver / Cpp2IL / Iced ほか (MIT)・Dobby (Apache-2.0) — 読み込み基盤が使うライブラリ
 - .NET ランタイム (MIT) — Mod の実行環境
 - Python と同梱パッケージ・three.js ほか — AI 実況相棒
