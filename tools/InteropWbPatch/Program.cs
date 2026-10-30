@@ -1,4 +1,5 @@
-// Il2CppInterop.Runtime 1.5.3 の barrier 無しの参照書き込み 3 か所を il2cpp_gc_wbarrier_set_field 経由に書き換える。
+// Il2CppInterop.Runtime の barrier 無しの参照書き込み (1.5.3 は 3 か所・Il2CppInteropFusion は 5 か所) を
+// il2cpp_gc_wbarrier_set_field 経由に書き換える。
 // packaging/il2cppinterop/Il2CppInterop.Runtime.dll はこのツールの出力に tools/InteropPtrCachePatch を掛けた物 (LGPL-3.0 の改変版)。
 //   1) IL2CPP.FieldWriteWbarrierStub(obj, target, value) の本体 = il2cpp_gc_wbarrier_set_field(obj, target, value)
 //      (ScanMethodRefs=false で生成した interop の参照型フィールド setter はここを呼ぶ)
@@ -6,7 +7,9 @@
 //   3) Il2CppStringArray の indexer setter の stind.i
 // 2) 3) は (target, value) がスタックに積まれているので、新設の IL2CPP.WbStore(target, value) の呼び出しへ置換する。
 // ゲーム本体の il2cpp_gc_wbarrier_set_field は第 1 引数を使わない (*target = value; GC_dirty(target)) ので obj = 0 でよい
-// (GameAssembly 2026.9.29 の逆アセンブルで確認)。
+// (GameAssembly 2026.9.29 の逆アセンブルで確認。Android arm64 の libil2cpp.so も x0 を捨てて str x1,[x0] + dirty の同じ形)。
+// 古い Runtime (Android ランチャーの Il2CppInteropFusion) は 4) Il2CppReferenceField<T>.Set と 5) Il2CppStringField.Set も
+// 生書きなので同じ置換を掛ける。
 // incremental GC が ON の間、barrier の無い書き込みは書いた先の参照が回収されうる (生きているのに解放される)。
 // 3 か所を直すと interop を作り直さずに incremental GC を ON にできる。mod 側は IL2CPP.WbStore の有無で
 // 書き換え済みかどうかを判定する (Modules/IncrementalGcInvalidator.cs)。
@@ -54,6 +57,12 @@ int n2 = Replace(refArr.Methods.Single(m => m.Name == "StoreValue"));
 // 3)
 var strArr = mod.GetType("Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray");
 int n3 = Replace(strArr.Methods.Single(m => m.Name == "set_Item"));
+// 4) 5) 注入クラスのフィールドの Set。PC の 1.5.3 は FieldWriteWbarrier を通すので 0 件、
+// Android ランチャーの Il2CppInteropFusion (1.5.2-ci.star.12) は *GetPointerToData() = value の生書きなので 1 件ずつ
+var refField = mod.GetType("Il2CppInterop.Runtime.InteropTypes.Fields.Il2CppReferenceField`1");
+int n4 = Replace(refField.Methods.Single(m => m.Name == "Set"));
+var strField = mod.GetType("Il2CppInterop.Runtime.InteropTypes.Fields.Il2CppStringField");
+int n5 = Replace(strField.Methods.Single(m => m.Name == "Set"));
 
 // 残りの stind.i / stind.ref を一覧に出す (型登録・メタデータ構造体への書き込みは GC 管理外なので対象外)
 foreach (var t in mod.GetTypes())
@@ -62,5 +71,5 @@ foreach (var t in mod.GetTypes())
             Console.WriteLine($"remaining {i.OpCode} in {t.FullName}::{m.Name}");
 
 asm.Write(args[1]);
-Console.WriteLine($"patched: stub=1 refArray={n2} stringArray={n3} -> {args[1]}");
-return (n2 == 1 && n3 == 1) ? 0 : 4;
+Console.WriteLine($"patched: stub=1 refArray={n2} stringArray={n3} refField={n4} stringField={n5} -> {args[1]}");
+return (n2 == 1 && n3 == 1 && n4 <= 1 && n5 <= 1) ? 0 : 4;
