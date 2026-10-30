@@ -259,6 +259,8 @@ Rename `winhttp.dll` in your `Among Us` folder to `winhttp.dll.disabled`. The ga
 
 You can host from your phone too. The game itself stays unmodified; the launcher starts it with the mod loaded.
 
+The launcher is **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** by All-Of-Us-Mods (GPL-3.0), rebranded and packaged as its own APK; most of its code is FusionCore's. End K not's changes are small: bundling End K not, fixes for x86_64 emulators, and a few others (details in [`Android/Launcher/UPSTREAM.md`](./Android/Launcher/UPSTREAM.md)).
+
 1. Install the official store version of Among Us on an Android 8.1+ arm64 device
 2. **[Download `EndKnot-<version>_Android.apk`](../../releases/latest)** and install it (you'll need to allow installs from unknown sources)
 3. Open the launcher and grant the "All files access" permission it asks for on first run
@@ -338,7 +340,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[ExtraRolesAmongUs](https://github.com/NotHunter101/ExtraRolesAmongUs)** (NotHunter101, GPL-3.0) — the mod the Medic came from
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — Airship patches
 - **[Foolers Mod](https://github.com/MengTube/Foolers-Mod)** (MengTube, GPL-3.0) — the mod the Terrorist came from
-- **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (All-Of-Us-Mods, GPL-3.0) — base of the Android launcher; hook handling for hosts that run it under translation (x86_64 emulators)
+- **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (All-Of-Us-Mods, GPL-3.0) — most of the Android launcher's code (the launcher is a rebranded FusionCore); hook handling for hosts that run it under translation (x86_64 emulators)
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754, MIT) — the idea of isolating cache domains with CPU Sets (the `CpuSetsMode` setting); our code is written directly against the Win32 API
 - **ImaMapleTree / 단풍잎 / Tealeaf** — ability activation via the pet button
 - **[Jester](https://github.com/Maartii/Jester)** (Maartii) — the mod the Jester came from

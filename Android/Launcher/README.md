@@ -3,7 +3,8 @@
 Android launcher that starts Among Us with the End K not mod loaded through BepInEx Fusion.
 It is a rebranded build of [FusionCore](https://github.com/All-Of-Us-Mods/FusionCore) by
 All-Of-Us-Mods, used under the GNU General Public License v3.0 (see [`LICENSE`](./LICENSE) and
-[`UPSTREAM.md`](./UPSTREAM.md) for how upstream is tracked).
+[`UPSTREAM.md`](./UPSTREAM.md) for how upstream is tracked). Most of the code here is FusionCore's;
+the local changes are small and listed in `UPSTREAM.md`.
 
 This mod is not affiliated with Among Us or Innersloth LLC, and the content contained therein is not endorsed or otherwise sponsored by Innersloth LLC. Portions of the materials contained herein are property of Innersloth LLC. © Innersloth LLC.
 Use at your own risk; Among Us must already be installed on the device from an official store. This launcher does not ship the game.
