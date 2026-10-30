@@ -260,6 +260,8 @@ zip に BepInEx 本体・設定ファイル・カスタムリージョン追加 
 
 スマホでもホストできます。ゲーム本体は改造せず、ランチャーが Mod を読み込んだ状態で起動します。
 
+このランチャーは All-Of-Us-Mods の **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)**（GPL-3.0）を名前と見た目だけ変えて APK にしたもので、コードの大部分は FusionCore のものです。End K not 側の変更は、End K not の同梱と x86_64 エミュレータ向けの修正などごく一部です（詳細は [`Android/Launcher/UPSTREAM.md`](./Android/Launcher/UPSTREAM.md)）。
+
 1. Android 8.1 以上・arm64 の端末に、公式ストア版の Among Us を入れておく
 2. **[`EndKnot-<バージョン>_Android.apk` をダウンロード](../../releases/latest)** してインストール（提供元不明のアプリの許可が必要です）
 3. ランチャーを開き、初回に求められる「すべてのファイルへのアクセス」を許可
@@ -340,7 +342,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[ExtraRolesAmongUs](https://github.com/NotHunter101/ExtraRolesAmongUs)** (NotHunter101、GPL-3.0) — 「メディック」の元になった Mod
 - **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — エアシップ関連のパッチ
 - **[Foolers Mod](https://github.com/MengTube/Foolers-Mod)** (MengTube、GPL-3.0) — 「テロリスト」の元になった Mod
-- **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (All-Of-Us-Mods、GPL-3.0) — Android ランチャーの土台、翻訳実行するホスト (x86_64 エミュレータ) 向けのフックの扱い
+- **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (All-Of-Us-Mods、GPL-3.0) — Android ランチャーのコードの大部分 (ランチャーは FusionCore を名前と見た目だけ変えたもの)、翻訳実行するホスト (x86_64 エミュレータ) 向けのフックの扱い
 - **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754、MIT) — CPU Sets によるキャッシュドメイン隔離の発想 (`CpuSetsMode` 設定)。コードは Win32 API から独自実装
 - **ImaMapleTree / 단풍잎 / Tealeaf** — ペットボタンによる能力発動の処理
 - **[Jester](https://github.com/Maartii/Jester)** (Maartii) — 「ジェスター」の元になった Mod
