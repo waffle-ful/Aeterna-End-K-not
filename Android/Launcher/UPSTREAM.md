@@ -38,7 +38,13 @@ The bundled assets differ from upstream as follows:
   `MonoMod.RuntimeDetour.dll` and `MonoMod.Iced.dll` are the ones shipped in upstream `ab1c510`
   (MonoMod.Core 1.4.0-alpha.dev, MonoMod.Utils 25.0.15-alpha.dev, MonoMod.RuntimeDetour
   25.4.0-alpha.dev); these flush the instruction cache after writing code, which translated hosts
-  need. The rest of the zip is unchanged.
+  need.
+- `core/Il2CppInterop.Runtime.dll` in that zip (Il2CppInteropFusion 1.5.2-ci.star.12, LGPL-3.0) is patched by
+  `tools/InteropWbPatch` (extract it, run the tool, put the output back under the same name): the incremental GC
+  stays on in the game, and the five reference stores the runtime writes directly (the field-write stub, reference
+  and string array element setters, `Il2CppReferenceField<T>.Set`, `Il2CppStringField.Set`) go through
+  `il2cpp_gc_wbarrier_set_field` so that a store into an already-marked object does not let the GC free the stored
+  object. The rest of the zip is unchanged.
 - `MonoMod.Core.dll` in that zip and `System.Diagnostics.Process.dll` in
   `fusionApp/src/main/assets/dotnet-arm64.zip` (both MIT) are patched by `tools/AndroidDotnetPatch`
   (run it on both zips; it is idempotent): when `FUSION_TRANSLATED` is set, a read-only mapping

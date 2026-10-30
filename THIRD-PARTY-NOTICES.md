@@ -48,7 +48,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)�
 | Lotus (LotusContinued) | Lotus-AU — [LotusContinued](https://github.com/Lotus-AU/LotusContinued) | GPL-3.0 | source, adapted in `Modules/WhitelistManager.cs` |
 | FusionCore | XtraCube / All-Of-Us-Mods — [FusionCore](https://github.com/All-Of-Us-Mods/FusionCore) | GPL-3.0 | source, `Android/Launcher/` (git subtree, rebranded Android launcher) |
 | BepInEx Fusion | All-Of-Us-Mods — [BepInExFusion](https://github.com/All-Of-Us-Mods/BepInExFusion) | LGPL-2.1 | bundled in the launcher APK (`Android/Launcher/fusionApp/src/main/assets/BepInEx-arm64.zip`) |
-| Il2CppInterop Fusion | All-Of-Us-Mods — [Il2CppInteropFusion](https://github.com/All-Of-Us-Mods/Il2CppInteropFusion) | LGPL-3.0 | bundled in the launcher APK (`Android/Launcher/fusionApp/src/main/assets/BepInEx-arm64.zip`) |
+| Il2CppInterop Fusion | All-Of-Us-Mods — [Il2CppInteropFusion](https://github.com/All-Of-Us-Mods/Il2CppInteropFusion) | LGPL-3.0 | bundled in the launcher APK (`Android/Launcher/fusionApp/src/main/assets/BepInEx-arm64.zip`; `Il2CppInterop.Runtime.dll` patched) |
 | .NET runtime | Microsoft & .NET Foundation — [dotnet/runtime](https://github.com/dotnet/runtime) | MIT | bundled in the launcher APK (`Android/Launcher/fusionApp/src/main/assets/dotnet-arm64.zip`, `jniLibs/arm64-v8a/`; `System.Diagnostics.Process.dll` patched) |
 | MonoMod (`MonoMod.Core`, `MonoMod.Utils`, `MonoMod.RuntimeDetour`, `MonoMod.Iced`) | 0x0ade — [MonoMod](https://github.com/MonoMod/MonoMod) | MIT | bundled in the launcher APK (`BepInEx-arm64.zip`; builds shipped with FusionCore, `MonoMod.Core` patched) |
 | Dobby (modified) | jmpews — [Dobby](https://github.com/jmpews/Dobby) | Apache-2.0 | bundled in the launcher APK (`jniLibs/arm64-v8a/libdobby.so`); changes in [`Android/Launcher/third_party/dobby/`](./Android/Launcher/third_party/dobby/) |
@@ -432,11 +432,17 @@ Android ランチャーの APK に同梱し、初回起動時に端末へ展開�
 ## Il2CppInterop Fusion (LGPL-3.0)
 
 [Il2CppInteropFusion](https://github.com/All-Of-Us-Mods/Il2CppInteropFusion) (All-Of-Us-Mods) is bundled
-unmodified inside the same `BepInEx-arm64.zip` in the Android launcher APK. The full text of the GNU
+inside the same `BepInEx-arm64.zip` in the Android launcher APK. End K not modifies its
+`core/Il2CppInterop.Runtime.dll` (1.5.2-ci.star.12) so that five reference stores go through the game's GC write barrier
+(`IL2CPP.FieldWriteWbarrierStub`, `Il2CppReferenceArray<T>.StoreValue`, the `Il2CppStringArray` indexer setter,
+`Il2CppReferenceField<T>.Set` and `Il2CppStringField.Set`; adds `IL2CPP.WbStore`). The modification is reproduced from
+the unmodified build by [`tools/InteropWbPatch`](./tools/InteropWbPatch/). The full text of the GNU
 Lesser General Public License v3.0 is available at <https://www.gnu.org/licenses/lgpl-3.0.html>, and the
 project's own repository carries its license file.
 
-同じ `BepInEx-arm64.zip` に無改変で同梱しています。LGPL-3.0 の全文は <https://www.gnu.org/licenses/lgpl-3.0.html> を参照してください。
+同じ `BepInEx-arm64.zip` に同梱しています。当 fork で `core/Il2CppInterop.Runtime.dll` の参照の書き込み 5 か所をゲームの
+GC 書き込みバリア経由に改変しています（改変は [`tools/InteropWbPatch`](./tools/InteropWbPatch/) で元のビルドから再現できます）。
+LGPL-3.0 の全文は <https://www.gnu.org/licenses/lgpl-3.0.html> を参照してください。
 
 ## .NET runtime
 
