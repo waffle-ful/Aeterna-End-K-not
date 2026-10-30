@@ -48,7 +48,7 @@ If the server drops you, End K not <b>re-creates the lobby</b> with the same set
 </td>
 <td width="33%" valign="top">
 <h3 align="center">📺<br>Streaming<br>tools</h3>
-End K not reads each player's chat aloud <b>in its own voice</b>. Viewers <b>affect the game</b> with <code>!</code> commands from live chat. An <b>AI commentary companion</b> calls kills, meetings, and wins as they happen.
+End K not reads each player's chat aloud in its own voice. Viewers affect the game with <code>!</code> commands from live chat. An <b>AI commentary companion</b> calls kills, meetings, and wins as they happen.
 </td>
 </tr>
 </table>
@@ -103,7 +103,7 @@ Sets a hidden forbidden word during the meeting. Anyone who says it dies on the 
 
 ### Easy to install, easy to remove
 
-The installer detects Steam or Epic and installs the mod. To remove it, rename `winhttp.dll` in the game folder and you're back to **plain Among Us.**
+The installer detects Steam or Epic and installs the mod. To remove it, rename `winhttp.dll` in the game folder and you're back to plain Among Us.
 
 <p align="center"><b>698 roles · 110+ chat commands · host-only install · Android support · free</b></p>
 
@@ -111,12 +111,12 @@ The installer detects Steam or Epic and installs the mod. To remove it, rename `
 
 ## About this mod
 
-**End K not** is an unofficial personal fork for Among Us that inherits roles and systems from both [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) and [TownOfHost-K (TOHK)](https://github.com/KYMario/TownOfHost-K). On top of EHR's role engine, it adds features for **streaming, long-running hosting, and presentation.**
+**End K not** is an unofficial personal fork for Among Us that inherits roles and systems from both [Endless Host Roles (EHR)](https://github.com/Gurge44/EndlessHostRoles) and [TownOfHost-K (TOHK)](https://github.com/KYMario/TownOfHost-K). On top of EHR's role engine, it adds features for streaming, long-running hosting, and presentation.
 
 This mod is unofficial and is **not affiliated with or endorsed by Innersloth**. **Please do not contact Innersloth regarding any issues with this mod.**
 
 > [!WARNING]
-> End K not is in **beta**. Some roles are untested and several features are works-in-progress. Please report bugs and suggestions on [GitHub Issues](../../issues) or our [Discord](https://discord.gg/s5J8c23Dms).
+> End K not is in **beta**. Some roles are untested and several features are works in progress. Please report bugs and suggestions on [GitHub Issues](../../issues) or our [Discord](https://discord.gg/s5J8c23Dms).
 
 Supported Among Us version: **2026.8.18**
 
@@ -295,9 +295,7 @@ End K not is run by the following members.
 | Tora-kun no Ie (トラ君の家) | Outreach & PR | [YouTube](https://www.youtube.com/@taizen-q3j) |
 | Chaco (チャコ) | Outreach & PR | |
 
-> You can trace the code modification history through this repository's git log and [`CHANGELOG.md`](./CHANGELOG.md).
-
-## Funding & Donations
+## Funding & donations
 
 End K not is a **free, GPL-3.0 mod**. All features stay free, and donations are optional.
 
@@ -319,7 +317,7 @@ No sponsors yet. We'd love for you to be the first!
 
 End K not is released under the **GNU General Public License v3.0**. See [`LICENSE`](./LICENSE) for details.
 
-End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) and [TownOfHost-K](https://github.com/KYMario/TownOfHost-K). waffle-ful has made the **modifications since April 2026**; you can trace the modification history in this repository's git log and [`CHANGELOG.md`](./CHANGELOG.md), in compliance with GPL-3.0 §5.
+End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) and [TownOfHost-K](https://github.com/KYMario/TownOfHost-K). waffle-ful has made the modifications since April 2026; you can trace the modification history in this repository's git log and [`CHANGELOG.md`](./CHANGELOG.md), in compliance with GPL-3.0 §5.
 
 ## Credits
 
@@ -419,7 +417,7 @@ We embed some components into `EndKnot.dll` and ship others inside the release p
 - .NET runtime (MIT): the runtime the mod runs on
 - Python with its packages, three.js and others: the AI commentary companion
 
-### Music Credits
+### Music credits
 
 BGM by **自称芸術家みーさん (Miisan)**
 - [HURT RECORD](https://www.hurtrecord.com/bgm/46/zero-no-heya.html)
@@ -427,14 +425,14 @@ BGM by **自称芸術家みーさん (Miisan)**
 BGM by **もっぴーさうんど (Moppy Sound)**, **こおろぎ (Kohrogi)**, **蒲鉾さちこ (Kamaboko Sachiko)**
 - [DOVA-SYNDROME](https://dova-s.jp/)
 
-### Sound Effect Credits
+### Sound effect credits
 
 Some sound effects use material from:
 - On-Jin ～音人～ ([https://on-jin.com/](https://on-jin.com/))
 - [DOVA-SYNDROME](https://dova-s.jp/)
 - [Pixabay](https://pixabay.com/)
 
-### Video Asset Credits
+### Video asset credits
 
 - [みりんの動画素材 (Miirriin)](https://miirriin.com/)
 
