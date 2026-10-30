@@ -40,7 +40,7 @@
 <tr>
 <td width="33%" valign="top">
 <h3 align="center">🎮<br>Host-only<br>install</h3>
-Everyone else joins on vanilla. You can gather players without asking them to "install this first." Official and custom servers both run the full feature set.
+Everyone else joins on vanilla. You can gather players without asking them to "install this first." You get the full feature set on official and custom servers.
 </td>
 <td width="33%" valign="top">
 <h3 align="center">🛡️<br>Lobby<br>recovery</h3>
@@ -105,7 +105,7 @@ Sets a hidden forbidden word during the meeting. Anyone who says it dies on the 
 
 The installer detects Steam or Epic and installs the mod. To remove it, rename `winhttp.dll` in the game folder and you're back to **plain Among Us.**
 
-<p align="center"><b>698 roles · 110+ chat commands · host-only install · Android support · completely free</b></p>
+<p align="center"><b>698 roles · 110+ chat commands · host-only install · Android support · free</b></p>
 
 ---
 
@@ -124,24 +124,24 @@ Supported Among Us version: **2026.8.18**
 
 ### 🎥 Streaming & long-running hosting
 
-- **Per-crew text-to-speech (VOICEVOX integration)** — Reads each player's chat aloud in its own voice. The host's own copy of [VOICEVOX](https://voicevox.hiroshiba.jp/) generates the voices. You hear the audio on the host's machine (your stream), and End K not doesn't send it into the game. You can pin a voice to a player name or a friend code. *(See [Credits](#credits) for the attribution required when streaming.)*
-- **Auto re-host & crash self-recovery** — When the official server kicks or drops the host, End K not builds a new lobby with the same region and the same settings. If Among Us crashes or hangs, the bundled external watchdog relaunches the game and restores the lobby. You can leave a stream running unattended for a full day.
-- **BGM system** — The host can replace the music for menu / lobby / in-task / climax / meeting / result. Default tracks ship with the mod.
-- **YouTube live chat overlay & auto-posting** — Draws your YouTube live chat over the game screen, and posts in-game events (kills, meetings, wins) back to that chat so viewers who look away still follow the round.
-- **Viewer intervention system** — Viewers spend points on `!`-prefixed live chat commands to interfere with the game. Commands include `!大地震` (big earthquake — closes all doors, cuts power, and randomly teleports players), `!天の声` (voice of heaven — broadcasts a viewer's message to all players), and `!偽死体` (fake corpse — spawns a fake dead body near a living player).
-- **AI commentary companion** — A separate AI process (Gemini Live) takes live game events and commentates through a 2D portrait with a lip-synced 3D avatar. It rotates through topics, so it doesn't repeat itself over a long stream.
-- **On-screen lobby code bubble** — A small draggable bubble that keeps your lobby code on screen for the whole stream.
+- **Per-crew text-to-speech (VOICEVOX integration)**: Reads each player's chat aloud in its own voice. The host's own copy of [VOICEVOX](https://voicevox.hiroshiba.jp/) generates the voices. You hear the audio on the host's machine (your stream), and End K not doesn't send it into the game. You can pin a voice to a player name or a friend code. *(See [Credits](#credits) for the attribution required when streaming.)*
+- **Auto re-host & crash self-recovery**: When the official server kicks or drops the host, End K not builds a new lobby with the same region and the same settings. If Among Us crashes or hangs, the bundled external watchdog relaunches the game and restores the lobby. You can leave a stream running unattended for a full day.
+- **BGM system**: The host can replace the music for menu / lobby / in-task / climax / meeting / result. Default tracks ship with the mod.
+- **YouTube live chat overlay & auto-posting**: Draws your YouTube live chat over the game screen, and posts in-game events (kills, meetings, wins) back to that chat so viewers who look away still follow the round.
+- **Viewer intervention system**: Viewers spend points on `!`-prefixed live chat commands to interfere with the game. Commands include `!大地震` (big earthquake: closes all doors, cuts power, and teleports players to random spots), `!天の声` (voice of heaven: broadcasts a viewer's message to all players), and `!偽死体` (fake corpse: spawns a fake dead body near a living player).
+- **AI commentary companion**: A separate AI process (Gemini Live) takes live game events and commentates through a 2D portrait with a lip-synced 3D avatar. It rotates through topics, so it doesn't repeat itself over a long stream.
+- **On-screen lobby code bubble**: A small draggable bubble that keeps your lobby code on screen for the whole stream.
 
 ### 🏚️ Lobby presentation & worlds
 
-- **Backrooms lobby** — A Backrooms-themed lobby. The host with the mod and players without it see different scenery.
-- **EKM custom map editor** — End K not bundles an editor for building custom maps ([`editor/`](./editor)). You can load your maps in-game *(work in progress)*.
-- **Lobby decorations** — Place decorations such as hot springs and portals in the lobby.
+- **Backrooms lobby**: A Backrooms-themed lobby. The host with the mod and players without it see different scenery.
+- **EKM custom map editor**: End K not bundles an editor for building custom maps ([`editor/`](./editor)). You can load your maps in-game *(work in progress)*.
+- **Lobby decorations**: Place decorations such as hot springs and portals in the lobby.
 
 ### 🎨 UI & policy
 
-- **Calamity-themed main menu** *(work in progress)* — A custom Calamity-style title screen (referencing [CalamityModPublic](https://github.com/CalamityTeam/CalamityModPublic)).
-- **GPL-3.0 open source** — The full source is public. You can study, modify, and redistribute it under GPL-3.0.
+- **Calamity-themed main menu** *(work in progress)*: A custom Calamity-style title screen (referencing [CalamityModPublic](https://github.com/CalamityTeam/CalamityModPublic)).
+- **GPL-3.0 open source**: The full source is public. You can study, modify, and redistribute it under GPL-3.0.
 
 ## Performance
 
@@ -165,7 +165,7 @@ We measured "vanilla / BepInEx only / current 0.15.1 dev build" on the same day 
 
 <p align="center"><img src=".github/perf-chart.png" alt="End K not performance comparison chart" width="90%"></p>
 
-Boot time runs until the main menu starts initializing. Lobby is a private lobby on the official servers with the host alone, in-game is The Skeld, both sampled while standing still (60 fps cap). In-game uses a one-player match for the current build and Freeplay for vanilla and BepInEx only. The current build is a development build compiled with the same configuration as the published one. It still includes the developer notice banner and measurement hooks that the published build leaves out. The current build's 1% low and frame time p95 were measured again in the afternoon of the same day on a build with lighter per-frame work (boot time and memory were not measured again, since nothing affecting them changed).
+Boot time runs until the main menu starts initializing. Lobby is a private lobby on the official servers with the host alone, in-game is The Skeld, both sampled while standing still (60 fps cap). In-game uses a one-player match for the current build and Freeplay for vanilla and BepInEx only. The current build is a development build compiled with the same configuration as the published one. It still includes the developer notice banner and measurement hooks that the published build leaves out. We measured the current build's 1% low and frame time p95 again that afternoon, on a build with lighter per-frame work. We left boot time and memory as they were, since that change doesn't affect them.
 
 Earlier boot times were 16.4 s for v0.9.6, 11.1 s for v0.9.7, 4.4 s for the 0.11.1 dev build and 4.7 s for the 0.13.2 dev build (v0.9.6 and v0.9.7 measured 2026-09-05 on the Epic build of 2026.8.18, with vanilla at 5.9 s in that run; 0.11.1 measured 2026-10-03 and 0.13.2 measured 2026-10-16, with vanilla at 5.2 s and 5.3 s). In-game resident memory went down from 985 MB on the 0.11.1 dev build and 891 MB on the 0.13.2 dev build to 827 MB.
 
@@ -206,7 +206,7 @@ End K not adds over 110 chat commands across the host, moderator, and player tie
 
 #### If Windows shows a blue warning
 
-The installer isn't code-signed, so the first run brings up a blue "**Windows protected your PC**" screen. Windows shows that screen for any unsigned exe from an individual developer. It does not mean a virus was detected.
+The installer isn't code-signed, so the first run brings up a blue "**Windows protected your PC**" screen. Windows shows that screen for any unsigned exe from an individual developer. It does not mean Windows found a virus.
 
 1. Click "**More info**"
 2. Click the "**Run anyway**" button that appears
@@ -264,7 +264,7 @@ The launcher is **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** b
 1. Install the official store version of Among Us on an Android 8.1+ arm64 device
 2. **[Download `EndKnot-<version>_Android.apk`](../../releases/latest)** and install it (you'll need to allow installs from unknown sources)
 3. Open the launcher and grant the "All files access" permission it asks for on first run
-4. The game launches automatically after a few seconds (tap the card to launch right away)
+4. The launcher starts the game after a few seconds (tap the card to start it sooner)
 
 To update, install the new APK over the old one. The launcher's "Get the update" button also takes you to Releases.
 
@@ -281,8 +281,8 @@ Edit `bgm_titles.json` to control title / author display while a BGM plays. End 
 
 ## Community
 
-- **Discord**: https://discord.gg/s5J8c23Dms — bug reports, questions, general chat (preferred)
-- **Issues**: [GitHub Issues](../../issues) — may take a while to respond
+- **Discord** (preferred): bug reports, questions and general chat at https://discord.gg/s5J8c23Dms
+- **Issues**: [GitHub Issues](../../issues). Replies may take a while.
 - [`CODE_OF_CONDUCT.md`](.github/CODE_OF_CONDUCT.md) | [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) | [`SECURITY.md`](.github/SECURITY.md) | [`SUPPORT.md`](.github/SUPPORT.md)
 
 ## Team
@@ -293,9 +293,9 @@ End K not is run by the following members.
 |---|---|---|
 | Chinese-made Waffle (中国産わっふる) | Development & maintenance | [YouTube](https://www.youtube.com/@wafflewafflewafflewafflewaffle) |
 | Tora-kun no Ie (トラ君の家) | Outreach & PR | [YouTube](https://www.youtube.com/@taizen-q3j) |
-| Chaco (チャコ) | Outreach & PR | — |
+| Chaco (チャコ) | Outreach & PR | |
 
-> The code modification history can be traced through this repository's git log and [`CHANGELOG.md`](./CHANGELOG.md).
+> You can trace the code modification history through this repository's git log and [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Funding & Donations
 
@@ -328,68 +328,68 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 <details>
 <summary><b>Show all credits (earlier mods · developers and translators · bundled software · music and assets)</b></summary>
 
-- **Among-Us-Love-Couple-Mod** (Woodi-dev) — the mod the Lovers came from
-- **[Among-Us-Sheriff-Mod](https://github.com/Woodi-dev/Among-Us-Sheriff-Mod)** (Woodi-dev, GPL-3.0) — the mod the Sheriff came from
-- **[astra1dev](https://github.com/astra1dev)** — advice on IMGUI window display settings
-- **[au.libhalt.net](https://au.libhalt.net/)** — an Among Us mod information and distribution site
-- **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc) — a client mod that adds automatic rejoining after a disconnect
-- **[BetterAmongUs](https://github.com/D1GQ/BetterAmongUs)** (D1GQ, GPL-3.0) — the modded-client support flag list
-- **[Calamity Mod (Terraria)](https://github.com/CalamityTeam/CalamityModPublic)** (Calamity Team) — reference for the main menu theme and visual design
-- **[CrowdedMod](https://github.com/CrowdedMods/CrowdedMod)** (andry08 / CrowdedMods, MIT) — large-lobby support
-- **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 et al., GPL-3.0) — base mod: the role engine, the large majority of roles, and an ongoing source of bug fixes
-- **[ExtraRolesAmongUs](https://github.com/NotHunter101/ExtraRolesAmongUs)** (NotHunter101, GPL-3.0) — the mod the Medic came from
-- **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji) — Airship patches
-- **[Foolers Mod](https://github.com/MengTube/Foolers-Mod)** (MengTube, GPL-3.0) — the mod the Terrorist came from
-- **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (XtraCube / All-Of-Us-Mods, GPL-3.0) — most of the Android launcher's code (the launcher is a rebranded FusionCore); hook handling for hosts that run it under translation (x86_64 emulators)
-- **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754, MIT) — the idea of isolating cache domains with CPU Sets (the `CpuSetsMode` setting); our code is written directly against the Win32 API
-- **ImaMapleTree / 단풍잎 / Tealeaf** — ability activation via the pet button
-- **[Jester](https://github.com/Maartii/Jester)** (Maartii) — the mod the Jester came from
-- **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0) — settings-conflict detection with host warnings, whitelist join restriction
-- **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj, GPL-3.0) — player position dots on the minimap
-- **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot, GPL-3.0) — custom region installer
-- **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods, LGPL-2.1) — UI sprites (two next-page buttons, two checkmarks), the role info tab panel
-- **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — Custom Net Objects (CNO), chat control and clearing, player-control helper code, vent operation patches, vote-kick handling, online permission checks
-- **[More Roles Plus](https://github.com/haru03741-glitch/More-Roles-Plus)** (haru03741-glitch, GPL-3.0) — copying the ability button into the bottom-right grid (freeplay spawn editor)
-- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** / [source code (Nebula-Public)](https://github.com/Dolly1016/Nebula-Public) (Dolly1016 et al., GPL-3.0; NebulaAPI is LGPL-3.0) — disabling incremental GC and running GC ahead of time; a mod with many roles of its own and its own API
-- **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor) — modded handshake, compiler-generated object and state machine wrappers, disabling the 5s timeout on custom servers
-- **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai) — a TOH-lineage mod adding its own roles and host-side features
-- **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff) — an Among Us role mod with a large set of original roles
-- **[Submerged](https://github.com/SubmergedAmongUs/Submerged)** (SubmergedAmongUs) — map select button handling for Submerged
-- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** / [ykundesu repo](https://github.com/ykundesu/SuperNewRoles) (SuperNewRoles team, GPL-3.0) — WaveCannon, Nova, search mod game, logo and stamp display, device usage restriction, video display handling, some roles
-- **[template-unity](https://github.com/vpmedia/template-unity)** (vpmedia, MIT) — reference for the Mersenne Twister implementation
-- **[TheEpicRoles](https://github.com/LaicosVK/TheEpicRoles)** (LaicosVK et al., GPL-3.0) — the idea of a shield for the first victim
-- **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)** — the mod many roles came from, such as the Vampire, Jackal, Guesser, and Bait; Submerged detection handling
-- **[TheOtherRoles (tomarai fork)](https://github.com/tomarai/TheOtherRoles)** (tomarai, GPL-3.0) — a TheOtherRoles derivative
-- **[TheOtherRoles-GM](https://github.com/yukinogatari/TheOtherRoles-GM)** (yukinogatari) — a TheOtherRoles derivative; the mod the Opportunist came from
-- **TOR_GM_Haoming_Edition** (haoming37) — a TheOtherRoles-GM derivative; the mod the Schrodinger's Cat and Evil Tracker came from
-- **[TOHEX / TONEX](https://github.com/TOHEX-Official/TownOfHostEdited-Xi)** — a host mod in the Town Of Host Edited lineage
-- **[TooManyRolesMods](https://github.com/Hardel-DW/TooManyRolesMods)** (Hardel-DW, GPL-3.0) — the mod the Time Master came from
-- **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers, GPL-3.0) — dleks map selection, kill button cooldown display, HUD startup handling, the role info tab panel
-- **[TouseefX](https://github.com/TouseefX)** — patch that prevents a crash when a destroyed button is clicked
-- **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 et al.) — the root of the whole lineage; version check, option saving, client option items, random spawn, sabotage system / sabotage button / moving platform handling
-- **[Town Of Host-H](https://github.com/Hyz-sui/TownOfHost-H)** (Hyz-sui) — a Town Of Host derivative host mod
-- **[Town Of Host-K](https://github.com/KYMario/TownOfHost-K)** (KYMario et al., GPL-3.0) — source of many ported roles, streaming-support features, the official-server packet-splitting safety net, device usage time limits
-- **[Town Of Host Re-Edited](https://github.com/Loonie-Toons/)** — EHR's fork origin
-- **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** (AsumuAkaguma, GPL-3.0) — BGM customization, chat character-type restriction (WordLimit), meeting start reason notification
-- **[Town Of Host_Y](https://github.com/Yumenopai/TownOfHost_Y)** (Yumenopai) — some roles, settings UI, zoom handling
-- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network team, GPL-3.0) — friend-code matching on join, meeting/ship/game-start/lobby patches, parts of the anti-cheat, the preset button and search bar in the settings menu (Drakos); a host mod with a large set of original roles
-- **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** / [TownOfHostEdited](https://github.com/KARPED1EM/TownOfHostEdited) / [TownOfNext](https://github.com/TownOfNext/TownOfNext) (KARPED1EM, GPL-3.0) — EHR's predecessor in the lineage; the in-game role info menu
-- **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq, GPL-3.0) — vent network map display (via [TownOfNext](https://github.com/TownOfNext/TownOfNext), [TOU-Mira](https://github.com/AU-Avengers/TOU-Mira) and [MalumMenu](https://github.com/scp222thj/MalumMenu))
-- **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024) — reactor meltdown boost
-- **[Town Of Us](https://github.com/slushiegoose/Town-Of-Us)** (slushiegoose, GPL-3.0) — the mod many roles came from, such as the Swapper, Arsonist, and Executioner
-- **[Town Of Us - Reactivated](https://github.com/eDonnes124/Town-Of-Us-R)** (eDonnes124, GPL-3.0) — host meeting display
-- **Town of Us Rewritten** (Det) — Discord activity (rich presence) display
-- **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau) — a Town Of Host derivative focused on optimization
-- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku et al., GPL-3.0) — source of many ported roles, WaveCannon design reference, direct numeric input for settings, consecutive-join kick, auto abort
-- **[TownOfHost-Shell](https://github.com/sijimi2222/TownOfHost-Shell)** (TORAKUNNOIE, GPL-3.0) — source of the Nova role
-- **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions repo](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion) — split RPC packs, meeting screen handling
-- **[TownOfHost-hamo](https://github.com/rar006/TownOfHost-hamo)** (rar006, GPL-3.0) — coming-out feature (`/co`, `/aco`, `/colist`)
-- **TownOfHost-Kemo** — the idea behind the roles Light, Shadow, Kemono and Furry
-- **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper) — a Town Of Host derivative adding its own roles
-- **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975) — zoom
-- **[UchuAddon](https://github.com/TeamUchuaddon/UchuAddon)** (TeamUchuaddon, GPL-3.0) — the Nova role
-- **[UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)** (NeighTools, LGPL-2.1) — `winhttp.dll` / `doorstop_config.ini` used for packaging
-- **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq, GPL-3.0) — meeting name plate cosmetics and meeting start patches; a client mod that improves vanilla quality of life
+- **Among-Us-Love-Couple-Mod** (Woodi-dev): the mod the Lovers came from
+- **[Among-Us-Sheriff-Mod](https://github.com/Woodi-dev/Among-Us-Sheriff-Mod)** (Woodi-dev, GPL-3.0): the mod the Sheriff came from
+- **[astra1dev](https://github.com/astra1dev)**: advice on IMGUI window display settings
+- **[au.libhalt.net](https://au.libhalt.net/)**: an Among Us mod information and distribution site
+- **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc): a client mod that adds automatic rejoining after a disconnect
+- **[BetterAmongUs](https://github.com/D1GQ/BetterAmongUs)** (D1GQ, GPL-3.0): the modded-client support flag list
+- **[Calamity Mod (Terraria)](https://github.com/CalamityTeam/CalamityModPublic)** (Calamity Team): reference for the main menu theme and visual design
+- **[CrowdedMod](https://github.com/CrowdedMods/CrowdedMod)** (andry08 / CrowdedMods, MIT): large-lobby support
+- **[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)** (Gurge44 et al., GPL-3.0): base mod: the role engine, the large majority of roles, and an ongoing source of bug fixes
+- **[ExtraRolesAmongUs](https://github.com/NotHunter101/ExtraRolesAmongUs)** (NotHunter101, GPL-3.0): the mod the Medic came from
+- **[ExtremeRoles](https://github.com/yukieiji/ExtremeRoles)** (yukieiji): Airship patches
+- **[Foolers Mod](https://github.com/MengTube/Foolers-Mod)** (MengTube, GPL-3.0): the mod the Terrorist came from
+- **[FusionCore](https://github.com/All-Of-Us-Mods/FusionCore)** (XtraCube / All-Of-Us-Mods, GPL-3.0): most of the Android launcher's code (the launcher is a rebranded FusionCore); hook handling for hosts that run it under translation (x86_64 emulators)
+- **[Game Optimizer (CPUs / Threads Optimizer)](https://github.com/charlie754/Game-Optimizer-CPUs-Threads-Optimizer)** (charlie754, MIT): the idea of isolating cache domains with CPU Sets (the `CpuSetsMode` setting); we wrote our own code against the Win32 API
+- **ImaMapleTree / 단풍잎 / Tealeaf**: ability activation via the pet button
+- **[Jester](https://github.com/Maartii/Jester)** (Maartii): the mod the Jester came from
+- **[Lotus (LotusContinued)](https://github.com/Lotus-AU/LotusContinued)** / [NikoCat233 fork](https://github.com/NikoCat233/LotusContinued) (GPL-3.0): settings-conflict detection with host warnings, whitelist join restriction
+- **[MalumMenu](https://github.com/scp222thj/MalumMenu)** (scp222thj, GPL-3.0): player position dots on the minimap
+- **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot, GPL-3.0): custom region installer
+- **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods, LGPL-2.1): UI sprites (two next-page buttons, two checkmarks), the role info tab panel
+- **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009): Custom Net Objects (CNO), chat control and clearing, player-control helper code, vent operation patches, vote-kick handling, online permission checks
+- **[More Roles Plus](https://github.com/haru03741-glitch/More-Roles-Plus)** (haru03741-glitch, GPL-3.0): copying the ability button into the bottom-right grid (freeplay spawn editor)
+- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** / [source code (Nebula-Public)](https://github.com/Dolly1016/Nebula-Public) (Dolly1016 et al., GPL-3.0; NebulaAPI is LGPL-3.0): disabling incremental GC and running GC ahead of time; a mod with many roles of its own and its own API
+- **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor): modded handshake, compiler-generated object and state machine wrappers, disabling the 5s timeout on custom servers
+- **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai): a TOH-lineage mod adding its own roles and host-side features
+- **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff): an Among Us role mod with a large set of original roles
+- **[Submerged](https://github.com/SubmergedAmongUs/Submerged)** (SubmergedAmongUs): map select button handling for Submerged
+- **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** / [ykundesu repo](https://github.com/ykundesu/SuperNewRoles) (SuperNewRoles team, GPL-3.0): WaveCannon, Nova, search mod game, logo and stamp display, device usage restriction, video display handling, some roles
+- **[template-unity](https://github.com/vpmedia/template-unity)** (vpmedia, MIT): reference for the Mersenne Twister implementation
+- **[TheEpicRoles](https://github.com/LaicosVK/TheEpicRoles)** (LaicosVK et al., GPL-3.0): the idea of a shield for the first victim
+- **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)**: the mod many roles came from, such as the Vampire, Jackal, Guesser, and Bait; Submerged detection handling
+- **[TheOtherRoles (tomarai fork)](https://github.com/tomarai/TheOtherRoles)** (tomarai, GPL-3.0): a TheOtherRoles derivative
+- **[TheOtherRoles-GM](https://github.com/yukinogatari/TheOtherRoles-GM)** (yukinogatari): a TheOtherRoles derivative; the mod the Opportunist came from
+- **TOR_GM_Haoming_Edition** (haoming37): a TheOtherRoles-GM derivative; the mod the Schrodinger's Cat and Evil Tracker came from
+- **[TOHEX / TONEX](https://github.com/TOHEX-Official/TownOfHostEdited-Xi)**: a host mod in the Town Of Host Edited lineage
+- **[TooManyRolesMods](https://github.com/Hardel-DW/TooManyRolesMods)** (Hardel-DW, GPL-3.0): the mod the Time Master came from
+- **[TOU-Mira](https://github.com/AU-Avengers/TOU-Mira)** (AU-Avengers, GPL-3.0): dleks map selection, kill button cooldown display, HUD startup handling, the role info tab panel
+- **[TouseefX](https://github.com/TouseefX)**: patch that prevents a crash when a destroyed button is clicked
+- **[Town Of Host](https://github.com/tukasa0001/TownOfHost)** (tukasa0001 et al.): the root of the whole lineage; version check, option saving, client option items, random spawn, sabotage system / sabotage button / moving platform handling
+- **[Town Of Host-H](https://github.com/Hyz-sui/TownOfHost-H)** (Hyz-sui): a Town Of Host derivative host mod
+- **[Town Of Host-K](https://github.com/KYMario/TownOfHost-K)** (KYMario et al., GPL-3.0): source of many ported roles, streaming-support features, the official-server packet-splitting safety net, device usage time limits
+- **[Town Of Host Re-Edited](https://github.com/Loonie-Toons/)**: EHR's fork origin
+- **[Town Of Host_ForE](https://github.com/AsumuAkaguma/TownOfHost_ForE)** (AsumuAkaguma, GPL-3.0): BGM customization, chat character-type restriction (WordLimit), meeting start reason notification
+- **[Town Of Host_Y](https://github.com/Yumenopai/TownOfHost_Y)** (Yumenopai): some roles, settings UI, zoom handling
+- **[Town of Host: Enhanced (TOHE)](https://github.com/EnhancedNetwork/TownofHost-Enhanced)** (The Enhanced Network team, GPL-3.0): friend-code matching on join, meeting/ship/game-start/lobby patches, parts of the anti-cheat, the preset button and search bar in the settings menu (Drakos); a host mod with a large set of original roles
+- **[Town Of Host Edited / Town Of Next](https://github.com/KARPED1EM/TownOfNext)** / [TownOfHostEdited](https://github.com/KARPED1EM/TownOfHostEdited) / [TownOfNext](https://github.com/TownOfNext/TownOfNext) (KARPED1EM, GPL-3.0): EHR's predecessor in the lineage; the in-game role info menu
+- **[Town Of Next: Edited (TONE)](https://github.com/qin-qwq/TownofNext-Edited)** (qin-qwq, GPL-3.0): vent network map display (via [TownOfNext](https://github.com/TownOfNext/TownOfNext), [TOU-Mira](https://github.com/AU-Avengers/TOU-Mira) and [MalumMenu](https://github.com/scp222thj/MalumMenu))
+- **[Town-Of-Moss](https://github.com/Koke1024/Town-Of-Moss)** (Koke1024): reactor meltdown boost
+- **[Town Of Us](https://github.com/slushiegoose/Town-Of-Us)** (slushiegoose, GPL-3.0): the mod many roles came from, such as the Swapper, Arsonist, and Executioner
+- **[Town Of Us - Reactivated](https://github.com/eDonnes124/Town-Of-Us-R)** (eDonnes124, GPL-3.0): host meeting display
+- **Town of Us Rewritten** (Det): Discord activity (rich presence) display
+- **[TownOfHost-Optimized](https://github.com/Limeau/TownofHost-Optimized)** (Limeau): a Town Of Host derivative focused on optimization
+- **[TownOfHost-Pko](https://github.com/satokazoku/TownOfHost-Pko)** (satokazoku et al., GPL-3.0): source of many ported roles, WaveCannon design reference, direct numeric input for settings, consecutive-join kick, auto abort
+- **[TownOfHost-Shell](https://github.com/sijimi2222/TownOfHost-Shell)** (TORAKUNNOIE, GPL-3.0): source of the Nova role
+- **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions repo](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion): split RPC packs, meeting screen handling
+- **[TownOfHost-hamo](https://github.com/rar006/TownOfHost-hamo)** (rar006, GPL-3.0): coming-out feature (`/co`, `/aco`, `/colist`)
+- **TownOfHost-Kemo**: the idea behind the roles Light, Shadow, Kemono and Furry
+- **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper): a Town Of Host derivative adding its own roles
+- **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975): zoom
+- **[UchuAddon](https://github.com/TeamUchuaddon/UchuAddon)** (TeamUchuaddon, GPL-3.0): the Nova role
+- **[UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)** (NeighTools, LGPL-2.1): `winhttp.dll` / `doorstop_config.ini` used for packaging
+- **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq, GPL-3.0): meeting name plate cosmetics and meeting start patches; a client mod that improves vanilla quality of life
 
 ### Thanks to the developers and translators
 
@@ -400,7 +400,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - Special Thanks: Seleneous / thewhiskas27 / HyperAtill / Sil
 - Translators: Dx (PT-BR) / PH_Gaming (PT-BR) / Tomix (PT-BR) / HyperAtill (RU) / ABoringCat (ZH-CN) / Reborn (ZH-CN) / Pomelo (ZH-TW) / Polan (JP) / DoArc (ES) / Kurma (ID) / Gurge44 (HU) / Æ (KO)
 
-> This mod's `Resources/Lang/` is inherited from EHR, so the translators' work above is included as-is.
+> End K not inherits `Resources/Lang/` from EHR, so it includes the translators' work above as-is.
 
 **[TownOfHost-K](https://github.com/KYMario/TownOfHost-K)**
 
@@ -409,15 +409,15 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 
 ### Bundled third-party software
 
-Some components are embedded into `EndKnot.dll`, others ship inside the release packages. All of them are the work of their respective authors and are licensed separately from End K not itself (GPL-3.0). The full list and license texts live in [`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md).
+We embed some components into `EndKnot.dll` and ship others inside the release packages. Their own authors wrote them, and each one keeps its own license, separate from End K not's GPL-3.0. The full list and license texts live in [`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md).
 
-- NVorbis (MIT) — Ogg Vorbis decoding
-- NLayer (MIT) — MP3 decoding
-- BepInEx / Unity Doorstop (LGPL-2.1), Il2CppInterop (LGPL-3.0) — the mod loading stack
-- BepInEx Fusion (LGPL-2.1), Il2CppInterop Fusion (LGPL-3.0) (All-Of-Us-Mods) — the loading stack bundled in the Android launcher
-- HarmonyX / MonoMod / Mono.Cecil / AsmResolver / Cpp2IL / Iced and others (MIT), Dobby (Apache-2.0) — libraries used by the loading stack
-- .NET runtime (MIT) — the runtime the mod runs on
-- Python with its packages, three.js and others — the AI commentary companion
+- NVorbis (MIT): Ogg Vorbis decoding
+- NLayer (MIT): MP3 decoding
+- BepInEx / Unity Doorstop (LGPL-2.1), Il2CppInterop (LGPL-3.0): the mod loading stack
+- BepInEx Fusion (LGPL-2.1), Il2CppInterop Fusion (LGPL-3.0) (All-Of-Us-Mods): the loading stack bundled in the Android launcher
+- HarmonyX / MonoMod / Mono.Cecil / AsmResolver / Cpp2IL / Iced and others (MIT), Dobby (Apache-2.0): libraries used by the loading stack
+- .NET runtime (MIT): the runtime the mod runs on
+- Python with its packages, three.js and others: the AI commentary companion
 
 ### Music Credits
 
@@ -442,7 +442,7 @@ Some sound effects use material from:
 
 ### VOICEVOX (text-to-speech)
 
-The per-crew read-aloud feature uses **[VOICEVOX](https://voicevox.hiroshiba.jp/)**, free Japanese text-to-speech software. End K not bundles no voice data. It has the VOICEVOX installed on the host's PC generate speech at runtime.
+The per-crew read-aloud feature uses **[VOICEVOX](https://voicevox.hiroshiba.jp/)**, free Japanese text-to-speech software. End K not bundles no voice data. The VOICEVOX installed on the host's PC generates the speech at runtime.
 
 > [!IMPORTANT]
 > **If you publish the generated audio in a stream or recording, you must credit both VOICEVOX and the character(s) used.**
