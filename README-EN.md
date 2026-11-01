@@ -419,6 +419,9 @@ We embed some components into `EndKnot.dll` and ship others inside the release p
 - .NET runtime (MIT): the runtime the mod runs on
 - OpenSSL, LLVM libunwind, AndroidX, Material Components, the Kotlin standard library, kotlinx.serialization (Apache-2.0), Protocol Buffers (BSD-3-Clause): libraries used by the Android launcher
 - Python with its packages, three.js / three-vrm / fflate: the AI commentary companion
+- Blockly (Apache-2.0), PixiJS / three.js / fflate / instanced-mesh / bvh.js / Tauri JS API / plugin-dialog / plugin-fs (MIT), Cormorant Garamond (SIL OFL 1.1): the EKM map editor web build
+- time (Rust library, MIT / Apache-2.0): included in the source of the EKM map editor desktop build
+- libmain.so (springmusk026): the Android launcher entry point (inherited from FusionCore)
 
 ### Music credits
 
