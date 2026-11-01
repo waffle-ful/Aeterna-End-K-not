@@ -329,6 +329,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **Among-Us-Love-Couple-Mod** (Woodi-dev): the mod the Lovers came from
 - **[Among-Us-Sheriff-Mod](https://github.com/Woodi-dev/Among-Us-Sheriff-Mod)** (Woodi-dev, GPL-3.0): the mod the Sheriff came from
 - **[astra1dev](https://github.com/astra1dev)**: advice on IMGUI window display settings
+- **[AndroidUtilities](https://github.com/All-Of-Us-Mods/AndroidUtilities)** (All-Of-Us-Mods, including AuthFix): reference for how the Android build signs in
 - **[au.libhalt.net](https://au.libhalt.net/)**: an Among Us mod information and distribution site
 - **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc): a client mod that adds automatic rejoining after a disconnect
 - **[BetterAmongUs](https://github.com/D1GQ/BetterAmongUs)** (D1GQ, GPL-3.0): the modded-client support flag list
@@ -411,11 +412,13 @@ We embed some components into `EndKnot.dll` and ship others inside the release p
 
 - NVorbis (MIT): Ogg Vorbis decoding
 - NLayer (MIT): MP3 decoding
+- Yusei Magic (SIL OFL 1.1): the font used inside the mod
 - BepInEx / Unity Doorstop (LGPL-2.1), Il2CppInterop (LGPL-3.0): the mod loading stack
 - BepInEx Fusion (LGPL-2.1), Il2CppInterop Fusion (LGPL-3.0) (All-Of-Us-Mods): the loading stack bundled in the Android launcher
-- HarmonyX / MonoMod / Mono.Cecil / AsmResolver / Cpp2IL / Iced and others (MIT), Dobby (Apache-2.0): libraries used by the loading stack
+- HarmonyX / MonoMod / Mono.Cecil / AsmResolver / Cpp2IL / Disarm / AssetRipper.CIL / AssetRipper.Primitives / Iced / Capstone.NET / SemanticVersioning (MIT), Dobby (Apache-2.0): libraries used by the loading stack
 - .NET runtime (MIT): the runtime the mod runs on
-- Python with its packages, three.js and others: the AI commentary companion
+- OpenSSL, LLVM libunwind, AndroidX, Material Components, the Kotlin standard library, kotlinx.serialization (Apache-2.0), Protocol Buffers (BSD-3-Clause): libraries used by the Android launcher
+- Python with its packages, three.js / three-vrm / fflate: the AI commentary companion
 
 ### Music credits
 
