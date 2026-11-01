@@ -2,11 +2,12 @@
 
 End K not itself is licensed under the GNU General Public License v3.0 (see [`LICENSE`](./LICENSE)).
 The components listed below are the work of other authors and keep their own licenses.
-They are either embedded into `EndKnot.dll` or shipped inside the release packages.
+They are either embedded into `EndKnot.dll`, shipped inside the release packages, or bundled into the
+EKM map editor web build.
 
 End K not 本体は GPL-3.0 です（[`LICENSE`](./LICENSE)）。以下は別の作者による著作物で、
 それぞれ独自のライセンスに従います。`EndKnot.dll` に埋め込まれているもの、
-配布パッケージに同梱されているものの両方を含みます。
+配布パッケージに同梱されているもの、EKM マップエディタのウェブ版に組み込まれているものを含みます。
 
 End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)
 (Gurge44 et al., GPL-3.0), and many of its roles are ported from
@@ -57,6 +58,13 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)�
 | AndroidX (annotation, appcompat, browser, coordinatorlayout, core) / Material Components | The Android Open Source Project / Google — [AndroidX](https://github.com/androidx/androidx), [material-components-android](https://github.com/material-components/material-components-android) | Apache-2.0 | bundled in the launcher APK |
 | Kotlin standard library / kotlinx.serialization | JetBrains — [Kotlin](https://github.com/JetBrains/kotlin), [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization) | Apache-2.0 | bundled in the launcher APK |
 | Protocol Buffers (protobuf-javalite) | Google — [protobuf](https://github.com/protocolbuffers/protobuf) | BSD-3-Clause | bundled in the launcher APK |
+| libmain.so | springmusk026 — [libmain.so](https://github.com/springmusk026/libmain.so) | (no license file published) | source, `Android/Launcher/fusionApp/src/main/jni/main/` (came in with FusionCore) |
+| Blockly | Google — [Blockly](https://github.com/google/blockly) | Apache-2.0 | EKM map editor web build (`editor/`, published on GitHub Pages) |
+| PixiJS (with @pixi/colord, earcut, eventemitter3, ismobilejs, parse-svg-path, gifuct-js, js-binary-schema-parser) | PixiJS Team — [PixiJS](https://github.com/pixijs/pixijs) | MIT (earcut: ISC) | EKM map editor web build |
+| three.js / fflate / instanced-mesh / bvh.js | three.js authors — [three.js](https://github.com/mrdoob/three.js); Arjun Barrett — [fflate](https://github.com/101arrowz/fflate); Andrea Gargaro — [instanced-mesh](https://github.com/three-ez/instanced-mesh), [bvh.js](https://github.com/agargaro/bvh.js) | MIT | EKM map editor web build |
+| Tauri JS API / plugin-dialog / plugin-fs | Tauri Programme within The Commons Conservancy — [tauri](https://github.com/tauri-apps/tauri), [plugins-workspace](https://github.com/tauri-apps/plugins-workspace) | MIT or Apache-2.0 | EKM map editor web build |
+| Cormorant Garamond (font) | The Cormorant Project Authors — [Cormorant](https://github.com/CatharsisFonts/Cormorant), via [Fontsource](https://github.com/fontsource/font-files) | SIL OFL 1.1 | EKM map editor web build |
+| time (Rust crate) | Jacob Pratt et al. — [time](https://github.com/time-rs/time) | MIT or Apache-2.0 | source, patched copy in `editor/src-tauri/vendor/time/` (its license files are kept there) |
 | AndroidUtilities / AuthFix | All-Of-Us-Mods — [AndroidUtilities](https://github.com/All-Of-Us-Mods/AndroidUtilities) | (no license file published) | technique reference only; no code copied |
 
 The GPL-3.0 entries above are ported source rather than bundled binaries. End K not is itself
@@ -103,6 +111,8 @@ SOFTWARE.
 
 ```
 Copyright 2020 The Yusei Magic Project Authors (https://github.com/tanukifont/YuseiMagic)
+Copyright 2015 The Cormorant Project Authors (github.com/CatharsisFonts/Cormorant) — Cormorant Garamond,
+used by the EKM map editor web build
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
@@ -273,6 +283,19 @@ SemanticVersioning  Copyright (c) Adam Reeve
 three.js            Copyright (c) 2010-2026 three.js authors
 three-vrm           Copyright (c) 2019-2026 pixiv Inc.
 fflate              Copyright (c) 2026 Arjun Barrett
+PixiJS              Copyright (c) 2013-2023 Mathew Groves, Chad Engler
+@pixi/colord        Copyright (c) Vlad Shilov
+eventemitter3       Copyright (c) 2014 Arnout Kazemier
+ismobilejs          Copyright (c) 2019 Kai Mallea
+parse-svg-path      Copyright (c) 2013 Jake Rosoman
+gifuct-js / js-binary-schema-parser
+                    Copyright (c) 2015 Matt Way
+instanced-mesh / bvh.js
+                    Copyright (c) 2024 Andrea Gargaro
+Tauri JS API / plugins (MIT option)
+                    Copyright (c) 2017 - Present Tauri Apps Contributors
+time (Rust crate, MIT option)
+                    Copyright (c) Jacob Pratt et al.
 ```
 
 ```
@@ -324,6 +347,30 @@ GC ハンドルを作った時のポインタを返すように改変してい�
 [`tools/InteropPtrCachePatch`](./tools/InteropPtrCachePatch/) の順で元のビルドから再現できます）。ライセンス全文は配布物の
 `licenses/` フォルダ（本リポジトリでは [`licenses/`](./licenses/)）にあります。
 
+## earcut (ISC)
+
+Bundled into the EKM map editor web build as a dependency of PixiJS.
+
+```
+ISC License
+
+Copyright (c) 2024, Mapbox
+
+Permission to use, copy, modify, and/or distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+```
+
+---
+
 ## Apache-2.0 components (Dobby, OpenSSL, Android launcher libraries)
 
 `dobby.dll` (release packages), and `libdobby.so`, `libcrypto.so`, `libssl.so`, `libfusionunwind.so`, AndroidX,
@@ -340,6 +387,7 @@ are licensed under the Apache License 2.0. The full text is in [`licenses/Apache
   (`Android/Launcher/fusionApp/src/main/jni/unwind/`).
 - AndroidX / Material Components — Copyright The Android Open Source Project / Google LLC.
 - Kotlin / kotlinx.serialization — Copyright JetBrains s.r.o. and Kotlin Programming Language contributors.
+- Blockly (EKM map editor web build) — Copyright Google LLC.
 
 Dobby・OpenSSL・Android ランチャーのライブラリは Apache License 2.0 です。`libdobby.so` は上記パッチを
 当てたビルドで、変更内容とビルド手順は `Android/Launcher/third_party/dobby/` にあります。

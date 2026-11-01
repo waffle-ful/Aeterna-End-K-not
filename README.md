@@ -423,6 +423,9 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - .NET ランタイム (MIT) — Mod の実行環境
 - OpenSSL・LLVM libunwind・AndroidX・Material Components・Kotlin 標準ライブラリ・kotlinx.serialization (Apache-2.0)・Protocol Buffers (BSD-3-Clause) — Android ランチャーが使うライブラリ
 - Python と同梱パッケージ・three.js / three-vrm / fflate — AI 実況相棒
+- Blockly (Apache-2.0)・PixiJS / three.js / fflate / instanced-mesh / bvh.js / Tauri JS API / plugin-dialog / plugin-fs (MIT)・Cormorant Garamond (SIL OFL 1.1) — EKM マップエディタのウェブ版
+- time (Rust のライブラリ・MIT / Apache-2.0) — EKM マップエディタのデスクトップ版のソースに同梱
+- libmain.so (springmusk026) — Android ランチャーの起動の入口 (FusionCore から引き継いだ部品)
 
 ### Music Credits
 自称芸術家みーさん様の BGM を使っています
