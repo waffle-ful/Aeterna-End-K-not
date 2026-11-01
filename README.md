@@ -333,6 +333,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **Among-Us-Love-Couple-Mod** (Woodi-dev) — 「ラバーズ」の元になった Mod
 - **[Among-Us-Sheriff-Mod](https://github.com/Woodi-dev/Among-Us-Sheriff-Mod)** (Woodi-dev、GPL-3.0) — 「シェリフ」の元になった Mod
 - **[astra1dev](https://github.com/astra1dev)** — IMGUI ウィンドウの表示設定まわりの助言
+- **[AndroidUtilities](https://github.com/All-Of-Us-Mods/AndroidUtilities)** (All-Of-Us-Mods、AuthFix を含む) — Android 版のログイン手法の参考
 - **[au.libhalt.net](https://au.libhalt.net/)** — Among Us の Mod 情報・配布サイト
 - **[AutoRejoin](https://github.com/Maxi0fc/AutoRejoin)** (Maxi0fc) — 切断後の自動再入室を追加するクライアント Mod
 - **[BetterAmongUs](https://github.com/D1GQ/BetterAmongUs)** (D1GQ、GPL-3.0) — modded クライアント判別フラグの一覧
@@ -415,11 +416,13 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 
 - NVorbis (MIT) — Ogg Vorbis のデコード
 - NLayer (MIT) — MP3 のデコード
+- Yusei Magic (SIL OFL 1.1) — Mod 内で使うフォント
 - BepInEx / Unity Doorstop (LGPL-2.1)・Il2CppInterop (LGPL-3.0) — Mod の読み込み基盤
 - BepInEx Fusion (LGPL-2.1)・Il2CppInterop Fusion (LGPL-3.0) (All-Of-Us-Mods) — Android ランチャーに同梱する読み込み基盤
-- HarmonyX / MonoMod / Mono.Cecil / AsmResolver / Cpp2IL / Iced ほか (MIT)・Dobby (Apache-2.0) — 読み込み基盤が使うライブラリ
+- HarmonyX / MonoMod / Mono.Cecil / AsmResolver / Cpp2IL / Disarm / AssetRipper.CIL / AssetRipper.Primitives / Iced / Capstone.NET / SemanticVersioning (MIT)・Dobby (Apache-2.0) — 読み込み基盤が使うライブラリ
 - .NET ランタイム (MIT) — Mod の実行環境
-- Python と同梱パッケージ・three.js ほか — AI 実況相棒
+- OpenSSL・LLVM libunwind・AndroidX・Material Components・Kotlin 標準ライブラリ・kotlinx.serialization (Apache-2.0)・Protocol Buffers (BSD-3-Clause) — Android ランチャーが使うライブラリ
+- Python と同梱パッケージ・three.js / three-vrm / fflate — AI 実況相棒
 
 ### Music Credits
 自称芸術家みーさん様の BGM を使っています
