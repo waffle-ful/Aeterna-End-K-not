@@ -337,7 +337,7 @@ internal static class ChatCommands
             new("Burst", "{count} [direct]", Command.UsageLevels.Host, Command.UsageTimes.Always, BurstCommand, true, true, [GetString("CommandArgs.Burst.Count"), GetString("CommandArgs.Burst.Direct")]),
             new("Nest", "{total} [options]", Command.UsageLevels.Host, Command.UsageTimes.Always, NestCommand, true, true, [GetString("CommandArgs.Nest.Total"), GetString("CommandArgs.Nest.Options")]),
             new("Map", "[list|load <file>|reload|exit|import|export|info]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, MapCommand, true, true),
-            new("Role", "[list | import | set [n] [slot] | unset [slot/all]]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, RoleCommand, true, true),
+            new("Role", "[editor | list | import | set [n] [slot] | unset [slot/all]]", Command.UsageLevels.Host, Command.UsageTimes.InLobby, RoleCommand, true, true),
             new("Whitelist", "[list|add <id/name>|remove <id/name>|reload]", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, WhitelistCommand, true, false),
             new("AllowJoin", "[id/name|clear]", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, AllowJoinCommand, true, false, [GetString("CommandArgs.AllowJoin.Target")]),
             new("Exempt", "[add|remove] [id/name]", Command.UsageLevels.HostOrModerator, Command.UsageTimes.Always, ExemptCommand, true, false),
@@ -3166,6 +3166,16 @@ internal static class ChatCommands
 
         switch (sub)
         {
+            case "editor":
+            case "maker":
+            case "open":
+            case "エディタ":
+            {
+                bool app = SymbolonLauncher.OpenRoleMaker();
+                Utils.SendMessage(GetString(app ? "EkRole.EditorOpened" : "EkRole.EditorOpenedWeb"), pid);
+                return;
+            }
+
             case "list":
             {
                 EkrManager.ReloadLibrary();

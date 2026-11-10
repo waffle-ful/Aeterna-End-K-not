@@ -75,6 +75,16 @@ pub fn run() {
       list_ekmaps
     ])
     .setup(|app| {
+      // 窓は設定から自前で作る (起動引数 --role-maker の時だけ、ページの読み込み前に
+      // URL を #role-maker にして役職メーカー画面で開くため)。
+      let window_config = app.config().app.windows[0].clone();
+      let mut window = tauri::WebviewWindowBuilder::from_config(app.handle(), &window_config)?;
+      if std::env::args().any(|a| a == "--role-maker") {
+        window = window.initialization_script(
+          "if (!location.hash) history.replaceState(null, '', '#role-maker');",
+        );
+      }
+      window.build()?;
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()

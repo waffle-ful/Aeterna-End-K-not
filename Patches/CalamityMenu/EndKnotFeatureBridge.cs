@@ -65,6 +65,17 @@ public static class EndKnotFeatureBridge
             EndKnot.Modules.Setup.StreamSetupGUI.Open);
 #endif
 
+        // Role maker (editor) launcher, under the stream setup button.
+        if (!CalamityDusk.Built)
+        CreateTextButton(
+            overlayLayer,
+            GetString("EkRole.MenuButton"),
+            new Vector3(-3.2f, 1.6f, 0f),
+            new Color(0.90f, 0.80f, 0.68f, 0.95f),
+            new Color(1.00f, 0.92f, 0.80f, 1f),
+            2.0f,
+            OpenRoleMaker);
+
         // Seasonal special message
         CreateSpecialMessage(overlayLayer);
 
@@ -76,6 +87,8 @@ public static class EndKnotFeatureBridge
 
         LateTask.New(() => ModUpdater.ShowAvailableUpdate(), 0.5f, "ShowUpdatePopupCalamity");
     }
+
+    private static void OpenRoleMaker() => EndKnot.Modules.Ekm.SymbolonLauncher.OpenRoleMaker();
 
     private static void OpenUrlIfSet(string url)
     {
@@ -189,12 +202,17 @@ public static class EndKnotFeatureBridge
         x = AddSeparator(parent, x, y, fontSize);
         x = AddLink(parent, "OFUSE", x, y, fontSize, () => OpenUrlIfSet(OfuseUrl));
 
+        // 右下は右端から「配信セットアップ」「役職メーカー」の順に詰めて並べ、左下のリンク列と釣り合わせる。
+        float right = halfW - 0.35f;
 #if !ANDROID
-        // 配信セットアップは右下に同じ文字サイズで置き、左下のリンク列と釣り合わせる。
         float setupWidth = AddLink(parent, GetString("Setup.MenuButton"), 0f, y, fontSize, EndKnot.Modules.Setup.StreamSetupGUI.Open);
         Transform setup = parent.GetChild(parent.childCount - 1);
-        setup.localPosition = new Vector3(halfW - 0.35f - setupWidth * 0.5f, y, 0f);
+        setup.localPosition = new Vector3(right - setupWidth * 0.5f, y, 0f);
+        right -= setupWidth + 0.45f;
 #endif
+        float makerWidth = AddLink(parent, GetString("EkRole.MenuButton"), 0f, y, fontSize, OpenRoleMaker);
+        Transform maker = parent.GetChild(parent.childCount - 1);
+        maker.localPosition = new Vector3(right - makerWidth * 0.5f, y, 0f);
 
         PassiveButton news = mm.newsButton;
         if (news == null) return;

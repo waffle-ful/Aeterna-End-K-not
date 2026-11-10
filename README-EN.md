@@ -135,7 +135,7 @@ Supported Among Us version: **2026.8.18**
 ### 🏚️ Lobby presentation & worlds
 
 - **Backrooms lobby**: A Backrooms-themed lobby. The host with the mod and players without it see different scenery.
-- **EKM custom map editor**: End K not bundles an editor for building custom maps ([`editor/`](./editor)). You can load your maps in-game *(work in progress)*.
+- **Role maker and custom map editor (Symbolon)**: End K not bundles an editor for building original roles and custom maps without writing code. Open it with the Role Maker button at the bottom right of the main menu (or `/role editor` in the lobby). After the first time, it is also in the Windows Start menu as "Symbolon", so you can open it without starting the game. To use a role, copy its code (`EKR1.…`) and run `/role import`. You can also download `Symbolon.exe` from the [releases page](https://github.com/waffle-ful/Aeterna-End-K-not/releases) and double-click it. There is also a [browser version](https://waffle-ful.github.io/Aeterna-End-K-not/editor/#role-maker) that needs no install *(work in progress)*.
 - **Lobby decorations**: Place decorations such as hot springs and portals in the lobby.
 
 ### 🎨 UI & policy
