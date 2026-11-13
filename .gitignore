@@ -462,6 +462,8 @@ tools/InteropWbPatch/obj/
 !tools/InteropPtrCachePatch/
 tools/InteropPtrCachePatch/bin/
 tools/InteropPtrCachePatch/obj/
+# ...and the Il2CppInterop source patch and build script (reproduce packaging/il2cppinterop/ from public source).
+!tools/Il2CppInterop/
 # ...and the crash-recovery watchdog, which is embedded into the DLL & shipped as a feature.
 !tools/EndKnotWatchdog.ps1
 !tools/番犬スタート.cmd
@@ -522,10 +524,11 @@ Resources/Sounds/Backrooms/*.ogg
 Resources/Sounds/Backrooms/*.mp3
 
 # Sound effects directly under Resources/Sounds/ (AudienceShock / WaveCannonCharge /
-# WaveCannonFire). Same rule as the BGM above — the BGM/ and Backrooms/ patterns do
-# not reach this directory, so it needs its own line. Only *.ogg is matched; the
+# WaveCannonFire / Earthquake). Same rule as the BGM above — the BGM/ and Backrooms/
+# patterns do not reach this directory, so it needs its own lines. The
 # upstream-inherited *.wav here stay tracked.
 Resources/Sounds/*.ogg
+Resources/Sounds/*.mp3
 
 # UI mockups / design drafts — local scratch files
 mock_refined.html

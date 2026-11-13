@@ -31,6 +31,12 @@
             The pointer to the first element in the array.
             </summary>
         </member>
+        <member name="M:Il2CppInterop.Runtime.MemoryUtils.GetModuleRegions(System.Diagnostics.ProcessModule)">
+            <summary>
+            Walks the module's address space via <c>VirtualQuery</c>, collecting each memory region so the scan can pick
+            the readable committed ones. Stops at the first <c>VirtualQuery</c> failure or once the module end is reached.
+            </summary>
+        </member>
         <member name="M:Il2CppInterop.Runtime.Runtime.ClassInjectorBase.FallbackGetGcHandlePtrFromIl2CppDelegateMTarget(System.IntPtr)">
             <summary>
             Tries to get the Garbage collector pointer from the m_target object from the m_target of the delegate.

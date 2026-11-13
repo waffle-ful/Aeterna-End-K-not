@@ -63,3 +63,6 @@
 *.yaml      linguist-vendored
 *.props     linguist-vendored
 *.targets   linguist-vendored
+
+# Applied with git apply to an LF checkout; keep it byte-for-byte
+tools/Il2CppInterop/*.patch -text

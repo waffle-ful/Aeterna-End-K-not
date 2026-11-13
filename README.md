@@ -354,12 +354,12 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — カスタムネットオブジェクト (CNO)、チャット制御と消去、プレイヤー操作まわりの補助処理、ベントの出入りまわりのパッチ、投票キックの処理、オンライン権限の確認
 - **[More Roles Plus](https://github.com/haru03741-glitch/More-Roles-Plus)** (haru03741-glitch、GPL-3.0) — 能力ボタンを複製して右下に並べる処理（フリープレイのスポーン地点エディタ）
 - **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** / [ソースコード (Nebula-Public)](https://github.com/Dolly1016/Nebula-Public) (Dolly1016 他、GPL-3.0 / NebulaAPI は LGPL-3.0) — incremental GC の無効化と GC の先撃ち。独自役職と独自 API を多数持つ Mod
-- **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor) — modded ハンドシェイク、コンパイラ生成オブジェクト・ステートマシンのラッパー、カスタムサーバーの 5 秒タイムアウト解除
+- **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor) (LGPL-3.0) — modded ハンドシェイク、コンパイラ生成オブジェクト・ステートマシンのラッパー、カスタムサーバーの 5 秒タイムアウト解除
 - **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai) — 独自役職とホスト向け機能を追加する TOH 系列の Mod
 - **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff) — 独自役職を多数持つ Among Us の役職 Mod
 - **[Submerged](https://github.com/SubmergedAmongUs/Submerged)** (SubmergedAmongUs) — マップ選択ボタンの扱い（Submerged 対応）
 - **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** / [ykundesu 版](https://github.com/ykundesu/SuperNewRoles) (SuperNewRoles 開発チーム、GPL-3.0) — 波動砲 (WaveCannon)、ノヴァ、Mod 部屋検索、ロゴ・スタンプの表示、デバイス使用の制限、動画表示まわり、一部の役職
-- **[template-unity](https://github.com/vpmedia/template-unity)** (vpmedia、MIT) — メルセンヌ・ツイスタ実装の参照元
+- **[Mersenne Twister](http://www.math.sci.hiroshima-u.ac.jp/m-mat/MT/emt.html)** (松本眞・西村拓士、BSD-3-Clause) — 乱数のメルセンヌ・ツイスタ (著作権表示と許諾文は `Modules/Random/MersenneTwister.cs` の先頭)
 - **[TheEpicRoles](https://github.com/LaicosVK/TheEpicRoles)** (LaicosVK 他、GPL-3.0) — 最初の犠牲者を守るシールドの発想
 - **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)** — ヴァンパイア・ジャッカル・ゲッサー・ベイティングなど多くの役職の元になった Mod。Submerged 判定まわりの処理
 - **[TheOtherRoles (tomarai 版)](https://github.com/tomarai/TheOtherRoles)** (tomarai、GPL-3.0) — TheOtherRoles の派生 Mod
@@ -390,8 +390,8 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **TownOfHost-Kemo** — 役職「光」「影」「ケモノ」「ファーリー」のアイデア
 - **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper) — Town Of Host に独自役職を追加した Mod
 - **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975) — ズーム
-- **[UchuAddon](https://github.com/TeamUchuaddon/UchuAddon)** (TeamUchuaddon、GPL-3.0) — 役職「ノヴァ」
-- **[UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)** (NeighTools、LGPL-2.1) — 配布パッケージの `winhttp.dll` / `doorstop_config.ini`
+- **[UchuAddon](https://github.com/TeamUchuaddon/UchuAddon)** (TeamUchuAddon 制作) — 役職「ノヴァ」(TownOfHost-Shell 経由)。UchuAddon は GPL ではなく、移した役職には [UchuAddon の利用ガイドライン](https://github.com/TeamUchuaddon/UchuAddon#uchuaddon%E3%81%AE%E5%88%A9%E7%94%A8%E3%82%AC%E3%82%A4%E3%83%89%E3%83%A9%E3%82%A4%E3%83%B3) が適用されます
+- **[UnityDoorstop](https://github.com/Pietrodjaowjao/UnityDoorstop)** (Pietrodjaowjao、LGPL-2.1。[NeighTools/UnityDoorstop](https://github.com/NeighTools/UnityDoorstop) の fork) — 配布パッケージの `winhttp.dll` / `doorstop_config.ini`
 - **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq、GPL-3.0) — 会議画面の名札の見た目と会議開始時のパッチ。バニラの使い勝手を改善するクライアント Mod
 
 ### 開発者・翻訳者への謝辞

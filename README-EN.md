@@ -350,12 +350,12 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009): Custom Net Objects (CNO), chat control and clearing, player-control helper code, vent operation patches, vote-kick handling, online permission checks
 - **[More Roles Plus](https://github.com/haru03741-glitch/More-Roles-Plus)** (haru03741-glitch, GPL-3.0): copying the ability button into the bottom-right grid (freeplay spawn editor)
 - **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** / [source code (Nebula-Public)](https://github.com/Dolly1016/Nebula-Public) (Dolly1016 et al., GPL-3.0; NebulaAPI is LGPL-3.0): disabling incremental GC and running GC ahead of time; a mod with many roles of its own and its own API
-- **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor): modded handshake, compiler-generated object and state machine wrappers, disabling the 5s timeout on custom servers
+- **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor) (LGPL-3.0): modded handshake, compiler-generated object and state machine wrappers, disabling the 5s timeout on custom servers
 - **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai): a TOH-lineage mod adding its own roles and host-side features
 - **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff): an Among Us role mod with a large set of original roles
 - **[Submerged](https://github.com/SubmergedAmongUs/Submerged)** (SubmergedAmongUs): map select button handling for Submerged
 - **[SuperNewRoles](https://github.com/SuperNewRoles/SuperNewRoles)** / [ykundesu repo](https://github.com/ykundesu/SuperNewRoles) (SuperNewRoles team, GPL-3.0): WaveCannon, Nova, search mod game, logo and stamp display, device usage restriction, video display handling, some roles
-- **[template-unity](https://github.com/vpmedia/template-unity)** (vpmedia, MIT): reference for the Mersenne Twister implementation
+- **[Mersenne Twister](http://www.math.sci.hiroshima-u.ac.jp/m-mat/MT/emt.html)** (Makoto Matsumoto and Takuji Nishimura, BSD-3-Clause): the Mersenne Twister random number generator (copyright notice and license at the top of `Modules/Random/MersenneTwister.cs`)
 - **[TheEpicRoles](https://github.com/LaicosVK/TheEpicRoles)** (LaicosVK et al., GPL-3.0): the idea of a shield for the first victim
 - **[TheOtherRoles](https://github.com/TheOtherRolesAU/TheOtherRoles)**: the mod many roles came from, such as the Vampire, Jackal, Guesser, and Bait; Submerged detection handling
 - **[TheOtherRoles (tomarai fork)](https://github.com/tomarai/TheOtherRoles)** (tomarai, GPL-3.0): a TheOtherRoles derivative
@@ -386,8 +386,8 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **TownOfHost-Kemo**: the idea behind the roles Light, Shadow, Kemono and Furry
 - **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper): a Town Of Host derivative adding its own roles
 - **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975): zoom
-- **[UchuAddon](https://github.com/TeamUchuaddon/UchuAddon)** (TeamUchuaddon, GPL-3.0): the Nova role
-- **[UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)** (NeighTools, LGPL-2.1): `winhttp.dll` / `doorstop_config.ini` used for packaging
+- **[UchuAddon](https://github.com/TeamUchuaddon/UchuAddon)** (made by TeamUchuAddon): the Nova role (via TownOfHost-Shell). UchuAddon is not GPL; the [UchuAddon usage guideline](https://github.com/TeamUchuaddon/UchuAddon#uchuaddon%E3%81%AE%E5%88%A9%E7%94%A8%E3%82%AC%E3%82%A4%E3%83%89%E3%83%A9%E3%82%A4%E3%83%B3) applies to the ported role
+- **[UnityDoorstop](https://github.com/Pietrodjaowjao/UnityDoorstop)** (Pietrodjaowjao, LGPL-2.1; a fork of [NeighTools/UnityDoorstop](https://github.com/NeighTools/UnityDoorstop)): `winhttp.dll` / `doorstop_config.ini` used for packaging
 - **[Vanilla Enhancements](https://github.com/xChipseq/VanillaEnhancements)** (xChipseq, GPL-3.0): meeting name plate cosmetics and meeting start patches; a client mod that improves vanilla quality of life
 
 ### Thanks to the developers and translators

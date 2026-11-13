@@ -25,9 +25,10 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles)�
 | NVorbis 0.10.5 | Andrew Ward — [NVorbis](https://github.com/NVorbis/NVorbis) | MIT | embedded in `EndKnot.dll` (Ogg Vorbis decoding) |
 | NLayer 1.16.0 | Mark Heath, Andrew Ward & Contributors (port of JavaLayer) — [NLayer](https://github.com/naudio/NLayer) | MIT | embedded in `EndKnot.dll` (MP3 decoding) |
 | Yusei Magic (font) | The Yusei Magic Project Authors — [YuseiMagic](https://github.com/tanukifont/YuseiMagic) | SIL OFL 1.1 | embedded in `EndKnot.dll` (`Resources/Fonts/YuseiMagic-Regular.ttf`, main menu text) |
-| Unity Doorstop 4.5.1 (`winhttp.dll`, `doorstop_config.ini`) | NeighTools — [UnityDoorstop](https://github.com/NeighTools/UnityDoorstop) | LGPL-2.1 | release packages |
+| Unity Doorstop 4.5.1 (`winhttp.dll`, `doorstop_config.ini`) | NeighTools, Pietrodjaowjao — [UnityDoorstop (Pietrodjaowjao fork)](https://github.com/Pietrodjaowjao/UnityDoorstop) of [NeighTools/UnityDoorstop](https://github.com/NeighTools/UnityDoorstop) | LGPL-2.1 | release packages (the x64 `winhttp.dll` of the fork's [v4.5.1 release](https://github.com/Pietrodjaowjao/UnityDoorstop/releases/tag/v4.5.1)) |
 | BepInEx (IL2CPP) | BepInEx team — [BepInEx](https://github.com/BepInEx/BepInEx) | LGPL-2.1 | release packages |
-| Il2CppInterop | BepInEx team, knah et al. — [Il2CppInterop](https://github.com/BepInEx/Il2CppInterop) | LGPL-3.0 | release packages (`BepInEx/core`; modified build — see [LGPL components](#lgpl-components-bepinex-unity-doorstop-miraapi-il2cppinterop)) |
+| Il2CppInterop | BepInEx team, knah et al., Pietrodjaowjao — [Il2CppInterop](https://github.com/BepInEx/Il2CppInterop), [Pietrodjaowjao fork](https://github.com/Pietrodjaowjao/Il2CppInterop) | LGPL-3.0 | release packages (`BepInEx/core`; modified build — see [LGPL components](#lgpl-components-bepinex-unity-doorstop-miraapi-il2cppinterop)) |
+| Reactor (state machine / compiler-generated object wrappers, custom server timeout patch) | NuclearPowered, XtraCube — [Reactor](https://github.com/NuclearPowered/Reactor), [XtraCube fork](https://github.com/XtraCube/Reactor) | LGPL-3.0 | source, adapted in `Modules/StateMachineWrapper.cs`, `Modules/CompilerGeneratedObjectWrapper.cs`, `Patches/ClientPatch.cs` |
 | HarmonyX (`0Harmony.dll`) | BepInEx, based on Harmony by Andreas Pardeike — [HarmonyX](https://github.com/BepInEx/HarmonyX) | MIT | release packages (`BepInEx/core`) |
 | MonoMod (`MonoMod.RuntimeDetour`, `MonoMod.Utils`) | 0x0ade — [MonoMod](https://github.com/MonoMod/MonoMod) | MIT | release packages (`BepInEx/core`) |
 | Mono.Cecil (`Mono.Cecil*.dll`) | Jb Evain, Novell — [Cecil](https://github.com/jbevain/cecil) | MIT | release packages (`BepInEx/core`) |
@@ -326,25 +327,33 @@ The three.js license file is also shipped next to the avatar page files as
 ## LGPL components (BepInEx, Unity Doorstop, MiraAPI, Il2CppInterop)
 
 BepInEx, Unity Doorstop and the MiraAPI sprites are licensed under LGPL-2.1 and are redistributed
-unmodified (except `doorstop_config.ini`, which is a plain configuration file).
-Il2CppInterop is licensed under LGPL-3.0. The release packages ship a patched build of
-Il2CppInterop 1.5.3 (`Il2CppInterop.Runtime.dll` / `Il2CppInterop.Common.dll`) taken from the packaging of
-[Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles/commit/c2e0b297e).
-On top of that build, End K not modifies `Il2CppInterop.Runtime.dll` so that three reference stores go through the game's
+unmodified (except `doorstop_config.ini`, which is a plain configuration file). The Unity Doorstop binary is the
+v4.5.1 release of [Pietrodjaowjao's fork](https://github.com/Pietrodjaowjao/UnityDoorstop) of NeighTools/UnityDoorstop
+(it adds environment variable configuration), shipped as released.
+Il2CppInterop is licensed under LGPL-3.0. The release packages ship Il2CppInterop 1.5.3
+(`Il2CppInterop.Runtime.dll` / `Il2CppInterop.Common.dll`, kept in [`packaging/il2cppinterop/`](./packaging/il2cppinterop/)) built from
+[Pietrodjaowjao/Il2CppInterop@f1627d60ef](https://github.com/Pietrodjaowjao/Il2CppInterop/commit/f1627d60efc218e4861bacc1239267f96f32ee2c)
+(a fork of BepInEx/Il2CppInterop) with [`tools/Il2CppInterop/il2cppinterop.patch`](./tools/Il2CppInterop/il2cppinterop.patch) applied
+(MemoryUtils calls `VirtualQuery` through its own P/Invoke and guards the memory scan; `Class_FromIl2CppType` gets a null guard);
+the built files report the version `1.5.3+f1627d60.endknot`.
+End K not further modifies `Il2CppInterop.Runtime.dll` so that three reference stores go through the game's
 GC write barrier (`IL2CPP.FieldWriteWbarrierStub`, `Il2CppReferenceArray<T>.StoreValue` and the
 `Il2CppStringArray` indexer setter; adds `IL2CPP.WbStore`), and so that `Il2CppObjectBase.Pointer` returns the pointer
 remembered when its GC handle was created instead of looking the handle up on every call (adds `cachedPointer`).
-The modifications are reproduced from the unmodified build by [`tools/InteropWbPatch`](./tools/InteropWbPatch/) followed by
-[`tools/InteropPtrCachePatch`](./tools/InteropPtrCachePatch/).
+[`tools/Il2CppInterop/build.ps1`](./tools/Il2CppInterop/build.ps1) reproduces the whole build: it fetches that commit, applies the patch,
+builds it, and runs [`tools/InteropWbPatch`](./tools/InteropWbPatch/) followed by [`tools/InteropPtrCachePatch`](./tools/InteropPtrCachePatch/).
 The full license texts are included in the release packages as `licenses/LGPL-2.1.txt` and
 `licenses/LGPL-3.0.txt` (and in this repository under [`licenses/`](./licenses/)).
 
-BepInEx・Unity Doorstop・MiraAPI のスプライトは LGPL-2.1 で、無改変で再配布しています
+BepInEx・Unity Doorstop・MiraAPI のスプライトは LGPL-2.1 で、無改変で再配布しています。Unity Doorstop は NeighTools/UnityDoorstop を
+Pietrodjaowjao が fork した物 (環境変数の設定を足した物) の v4.5.1 のリリースです
 （`doorstop_config.ini` は設定ファイルのため当 fork 向けに調整）。Il2CppInterop は LGPL-3.0 で、
-配布物には Endless Host Roles の配布構成に含まれる修正版ビルドを同梱しています。さらに当 fork で
+配布物には [Pietrodjaowjao/Il2CppInterop@f1627d60ef](https://github.com/Pietrodjaowjao/Il2CppInterop/commit/f1627d60efc218e4861bacc1239267f96f32ee2c) (BepInEx/Il2CppInterop の fork) に
+`tools/Il2CppInterop/il2cppinterop.patch` を当ててビルドした物 (MemoryUtils の `VirtualQuery` を自前の P/Invoke で呼び、メモリの走査に守りを足し、
+`Class_FromIl2CppType` に null の守りを足した物。版は `1.5.3+f1627d60.endknot` と名乗る) を同梱しています。さらに当 fork で
 `Il2CppInterop.Runtime.dll` の参照の書き込み 3 か所をゲームの GC 書き込みバリア経由に改変し、`Il2CppObjectBase.Pointer` が
-GC ハンドルを作った時のポインタを返すように改変しています（改変は [`tools/InteropWbPatch`](./tools/InteropWbPatch/) →
-[`tools/InteropPtrCachePatch`](./tools/InteropPtrCachePatch/) の順で元のビルドから再現できます）。ライセンス全文は配布物の
+GC ハンドルを作った時のポインタを返すように改変しています（取得・パッチ・ビルド・[`tools/InteropWbPatch`](./tools/InteropWbPatch/) →
+[`tools/InteropPtrCachePatch`](./tools/InteropPtrCachePatch/) の一連は [`tools/Il2CppInterop/build.ps1`](./tools/Il2CppInterop/build.ps1) で再現できます）。ライセンス全文は配布物の
 `licenses/` フォルダ（本リポジトリでは [`licenses/`](./licenses/)）にあります。
 
 ## earcut (ISC)
