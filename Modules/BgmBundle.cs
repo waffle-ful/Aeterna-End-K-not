@@ -101,10 +101,10 @@ internal static class BgmBundle
     {
         try
         {
-            using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(EmbeddedResourceName);
+            using Stream stream = MusicPack.OpenEmbeddedOrPack(EmbeddedResourceName);
             if (stream == null)
             {
-                Logger.Warn("BGM bundle: embedded resource not found, bundle playback unavailable", "BgmBundle");
+                Logger.Info("BGM bundle: not found in End K not or EndKnot.Music.dll, bundle playback unavailable", "BgmBundle");
                 return null;
             }
 

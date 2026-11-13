@@ -71,9 +71,19 @@ public static class BGMManager
         ResetWatchdog();
     }
 
+    private static readonly string[] Slots = ["menu", "lobby", "intask", "climax", "dead", "meeting", "result"];
+
     private static Dictionary<string, List<BGMEntry>> LoadPlaylist()
     {
         var result = LoadEmbeddedPlaylist();
+
+        // 一覧に曲の無い枠は、ホストが resources/BGM/ に枠と同じ名前 (menu.ogg など) で置いた曲を鳴らす
+        // (同梱 BGM の EndKnot.Music.dll が無い時も、曲を置くだけで鳴るように)
+        foreach (string slot in Slots)
+        {
+            if (result.TryGetValue(slot, out var entries) && entries.Count > 0) continue;
+            if (HasUserOverride(slot)) result[slot] = [new BGMEntry { file = slot }];
+        }
 
         string userPath = BGMPath + "bgm_config.json";
         if (!File.Exists(userPath)) return result;
@@ -98,11 +108,11 @@ public static class BGMManager
     {
         try
         {
-            Stream stream = Assembly.GetExecutingAssembly()
-                .GetManifestResourceStream("EndKnot.Resources.Sounds.BGM.bgm_titles.json");
+            // 同梱 BGM の曲名の一覧は、曲と一緒に EndKnot.Music.dll が持つ
+            Stream stream = MusicPack.OpenEmbeddedOrPack("EndKnot.Resources.Sounds.BGM.bgm_titles.json");
             if (stream == null)
             {
-                Logger.Warn("Embedded bgm_titles.json not found", "BGMManager");
+                Logger.Info("bgm_titles.json not found (no EndKnot.Music.dll); playing host files only", "BGMManager");
                 return [];
             }
             using (stream)

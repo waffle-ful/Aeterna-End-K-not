@@ -19,6 +19,8 @@ internal static class EmbeddedBundleFile
     private static bool _scanned;
     private static string _path;
     private static Dictionary<string, long> _offsets;
+    private static string _packPath;
+    private static Dictionary<string, long> _packOffsets;
 
     internal static AssetBundle TryOpen(string resourceName)
     {
@@ -28,10 +30,10 @@ internal static class EmbeddedBundleFile
         try
         {
             if (!_scanned) Scan();
-            if (_offsets == null || !_offsets.TryGetValue(resourceName, out long offset)) return null;
-            if (!HasSignature(offset)) return null;
+            if (!TryLocate(resourceName, out string path, out long offset)) return null;
+            if (!HasSignature(path, offset)) return null;
 
-            return AssetBundle.LoadFromFile(_path, 0u, (ulong)offset);
+            return AssetBundle.LoadFromFile(path, 0u, (ulong)offset);
         }
         catch (Exception e)
         {
@@ -50,10 +52,10 @@ internal static class EmbeddedBundleFile
         try
         {
             if (!_scanned) Scan();
-            if (_offsets == null || !_offsets.TryGetValue(resourceName, out long offset)) return null;
-            if (!HasSignature(offset)) return null;
+            if (!TryLocate(resourceName, out string path, out long offset)) return null;
+            if (!HasSignature(path, offset)) return null;
 
-            return AssetBundle.LoadFromFileAsync(_path, 0u, (ulong)offset);
+            return AssetBundle.LoadFromFileAsync(path, 0u, (ulong)offset);
         }
         catch (Exception e)
         {
@@ -65,18 +67,41 @@ internal static class EmbeddedBundleFile
 
 #if !ANDROID
     // 埋め込みリソースは DLL の中に無圧縮で並んでいる。名前ごとの開始位置を 1 回だけ引いておく。
+    // End K not 自身と、同梱 BGM の EndKnot.Music.dll (MusicPack) の両方を見る。
     private static void Scan()
     {
         _scanned = true;
 
         string path = Assembly.GetExecutingAssembly().Location;
-        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+        if (!string.IsNullOrEmpty(path) && File.Exists(path))
+        {
+            _offsets = ScanFile(path, out CorHeader cor, out long probeRel);
+            if (_offsets != null)
+            {
+                _path = path;
+                _probeRel = probeRel;
+                _resRva = cor.ResourcesDirectory.RelativeVirtualAddress;
+                _resSize = cor.ResourcesDirectory.Size;
+            }
+        }
+
+        string packPath = MusicPack.PackPath;
+        if (File.Exists(packPath))
+        {
+            _packOffsets = ScanFile(packPath, out _, out _);
+            if (_packOffsets != null) _packPath = packPath;
+        }
+    }
+
+    private static Dictionary<string, long> ScanFile(string path, out CorHeader cor, out long probeRel)
+    {
+        probeRel = -1;
 
         using FileStream fs = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using PEReader pe = new(fs);
 
-        CorHeader cor = pe.PEHeaders.CorHeader;
-        if (cor == null || !pe.PEHeaders.TryGetDirectoryOffset(cor.ResourcesDirectory, out int start)) return;
+        cor = pe.PEHeaders.CorHeader;
+        if (cor == null || !pe.PEHeaders.TryGetDirectoryOffset(cor.ResourcesDirectory, out int start)) return null;
 
         MetadataReader md = pe.GetMetadataReader();
         Dictionary<string, long> offsets = new(StringComparer.Ordinal);
@@ -91,13 +116,20 @@ internal static class EmbeddedBundleFile
 
             // 各リソースの先頭 4 バイトは長さ
             offsets[name] = start + res.Offset + 4;
-            if (_probeRel < 0) _probeRel = res.Offset + 4;
+            if (probeRel < 0) probeRel = res.Offset + 4;
         }
 
-        _path = path;
-        _offsets = offsets;
-        _resRva = cor.ResourcesDirectory.RelativeVirtualAddress;
-        _resSize = cor.ResourcesDirectory.Size;
+        return offsets;
+    }
+
+    private static bool TryLocate(string resourceName, out string path, out long offset)
+    {
+        if (_offsets != null && _offsets.TryGetValue(resourceName, out offset)) { path = _path; return true; }
+        if (_packOffsets != null && _packOffsets.TryGetValue(resourceName, out offset)) { path = _packPath; return true; }
+
+        path = null;
+        offset = 0;
+        return false;
     }
 
     private static int _resRva, _resSize;
@@ -135,9 +167,9 @@ internal static class EmbeddedBundleFile
         }
     }
 
-    private static bool HasSignature(long offset)
+    private static bool HasSignature(string path, long offset)
     {
-        using FileStream fs = new(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using FileStream fs = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         fs.Seek(offset, SeekOrigin.Begin);
 
         Span<byte> head = stackalloc byte[Signature.Length];

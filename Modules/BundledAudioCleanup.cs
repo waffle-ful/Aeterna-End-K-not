@@ -134,7 +134,7 @@ public static class BundledAudioCleanup
     {
         try
         {
-            using Stream embedded = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
+            using Stream embedded = MusicPack.OpenEmbeddedOrPack(resourceName);
             if (embedded == null) return false;
 
             using FileStream disk = File.OpenRead(path);
@@ -174,11 +174,14 @@ public static class BundledAudioCleanup
         return off;
     }
 
-    // DLL に埋め込まれている音声リソースから、旧方式が書き出していたであろう実ファイルパスを組み立てる。
+    // DLL (と同梱 BGM の EndKnot.Music.dll) に埋め込まれている音声リソースから、旧方式が書き出していたであろう実ファイルパスを組み立てる。
     // 埋込リソースが正典なので、同梱ラインナップが変わってもこの一覧は自動で追随する。
     private static IEnumerable<(string Resource, string Target)> EnumerateBundledTargets()
     {
-        foreach (string res in Assembly.GetExecutingAssembly().GetManifestResourceNames())
+        HashSet<string> names = new(Assembly.GetExecutingAssembly().GetManifestResourceNames(), StringComparer.Ordinal);
+        names.UnionWith(MusicPack.Names);
+
+        foreach (string res in names)
         {
             if (!res.StartsWith(ResourcePrefix, StringComparison.Ordinal)) continue;
 

@@ -271,6 +271,8 @@ zip に BepInEx 本体・設定ファイル・カスタムリージョン追加 
 
 ## BGM のカスタマイズ
 
+同梱の BGM は、曲のデータだけを収めた `EndKnot.Music.dll` (`BepInEx/plugins/` に入ります) に入っています。このファイルは End K not 本体 (GPL-3.0) とは別のライセンスの、コードを持たないデータで、End K not は無くても動きます (その場合は、下の場所に置いた曲だけが鳴ります)。
+
 ホストは BGM を自前の楽曲に差し替えられます。
 
 - 場所 : `Among Us/BepInEx/resources/BGM/`
@@ -278,7 +280,7 @@ zip に BepInEx 本体・設定ファイル・カスタムリージョン追加 
 - 対応スロット : `menu` / `lobby` / `intask` / `climax` / `meeting` / `result`
 - ファイル名例 : `menu.ogg`、`lobby.mp3` など
 
-`bgm_titles.json` を編集すると、BGM 再生時のタイトル / 作者表示も変えられます。ディスクに該当ファイルがあればそれを、無ければ同梱 BGM を鳴らします。
+同じ場所に `bgm_config.json` を置くと、枠ごとの曲の候補とタイトル / 作者表示を決められます (書き方は同じ場所にできる `bgm_config.example.jsonc` を参照)。ディスクに該当ファイルがあればそれを、無ければ同梱 BGM を鳴らします。
 
 ## コミュニティ
 
@@ -428,18 +430,16 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - libmain.so (springmusk026) — Android ランチャーの起動の入口 (FusionCore から引き継いだ部品)
 
 ### Music Credits
+`EndKnot.Music.dll` に収めている BGM です。
 自称芸術家みーさん様の BGM を使っています
 - [HURT RECORD](https://www.hurtrecord.com/bgm/46/zero-no-heya.html)
 
 もっぴーさうんど様・こおろぎ様・蒲鉾さちこ様の BGM を使っています
-- [DOVA-SYNDROME](https://dova-s.jp/)
+- [OpenTracks (旧 DOVA-SYNDROME)](https://opentracks.com/)
 
-### 効果音クレジット
+### 効果音
 
-一部の効果音に以下の素材を使用しています。
-- On-Jin ～音人～ ([https://on-jin.com/](https://on-jin.com/))
-- [DOVA-SYNDROME](https://dova-s.jp/)
-- [Pixabay](https://pixabay.com/)
+一部の効果音は `tools/SfxSynth` で合成しています。
 
 ### 動画素材クレジット
 

@@ -357,8 +357,13 @@ public static class CustomSoundsManager
 
     // 埋込リソース名の一覧は不変なので一度だけ作る。存在確認のたびに GetManifestResourceStream で
     // 開いて捨てると、音を鳴らすたびに Stream が 1〜3 個ゴミになる (解決は毎再生走る)。
+    // 同梱 BGM の EndKnot.Music.dll (MusicPack) のリソースも同じ擬似キーで扱う。
     private static readonly Lazy<HashSet<string>> EmbeddedResourceNames = new(() =>
-        new HashSet<string>(Assembly.GetExecutingAssembly().GetManifestResourceNames(), StringComparer.Ordinal));
+    {
+        HashSet<string> names = new(Assembly.GetExecutingAssembly().GetManifestResourceNames(), StringComparer.Ordinal);
+        names.UnionWith(MusicPack.Names);
+        return names;
+    });
 
     // 埋込リソースが存在すれば擬似キーを、無ければ null を返す (BGMManager からも使う)。
     internal static string TryEmbeddedKey(string resourceName)
@@ -369,7 +374,7 @@ public static class CustomSoundsManager
     private static Stream OpenSound(string key)
     {
         Stream stream = IsEmbeddedKey(key)
-            ? Assembly.GetExecutingAssembly().GetManifestResourceStream(key[EmbeddedKeyPrefix.Length..])
+            ? MusicPack.OpenEmbeddedOrPack(key[EmbeddedKeyPrefix.Length..])
             : File.OpenRead(key);
 
         return stream ?? throw new IOException($"Sound source not found: {key}");

@@ -270,6 +270,8 @@ To update, install the new APK over the old one. The launcher's "Get the update"
 
 ## BGM customization
 
+The bundled music is in `EndKnot.Music.dll` (installed to `BepInEx/plugins/`), a code-free data file under its own license, separate from End K not itself (GPL-3.0). End K not runs without it; it then plays only the tracks you place in the folder below.
+
 Hosts can replace the bundled music with their own:
 
 - Location: `Among Us/BepInEx/resources/BGM/`
@@ -277,7 +279,7 @@ Hosts can replace the bundled music with their own:
 - Supported slots: `menu` / `lobby` / `intask` / `climax` / `meeting` / `result`
 - Example filenames: `menu.ogg`, `lobby.mp3`
 
-Edit `bgm_titles.json` to control title / author display while a BGM plays. End K not plays your file for a slot if one exists, and the bundled track otherwise.
+Put a `bgm_config.json` in the same folder to choose the candidate tracks and the title / author display for each slot (see the `bgm_config.example.jsonc` created there). End K not plays your file for a slot if one exists, and the bundled track otherwise.
 
 ## Community
 
@@ -425,18 +427,17 @@ We embed some components into `EndKnot.dll` and ship others inside the release p
 
 ### Music credits
 
+These tracks are in `EndKnot.Music.dll`.
+
 BGM by **自称芸術家みーさん (Miisan)**
 - [HURT RECORD](https://www.hurtrecord.com/bgm/46/zero-no-heya.html)
 
 BGM by **もっぴーさうんど (Moppy Sound)**, **こおろぎ (Kohrogi)**, **蒲鉾さちこ (Kamaboko Sachiko)**
-- [DOVA-SYNDROME](https://dova-s.jp/)
+- [OpenTracks (formerly DOVA-SYNDROME)](https://opentracks.com/)
 
-### Sound effect credits
+### Sound effects
 
-Some sound effects use material from:
-- On-Jin ～音人～ ([https://on-jin.com/](https://on-jin.com/))
-- [DOVA-SYNDROME](https://dova-s.jp/)
-- [Pixabay](https://pixabay.com/)
+Some sound effects are synthesized by `tools/SfxSynth`.
 
 ### Video asset credits
 

@@ -46,6 +46,12 @@
         <EmbeddedResource Include=".\Resources\**"/>
     </ItemGroup>
 
+    <!-- The bundled BGM (tracks, bgm_titles.json and the BGM AssetBundles) lives in EndKnot.Music.dll, a separately
+         licensed resource-only assembly that Modules/MusicPack.cs reads at runtime, so nothing under
+         Resources/Sounds/BGM is embedded here. -->
+    <ItemGroup>
+        <EmbeddedResource Remove="Resources\Sounds\BGM\**" />
+    </ItemGroup>
     <!-- The wave cannon plays HadouCharge / HadouFire now; the earlier clips are no longer referenced by code. -->
     <ItemGroup>
         <EmbeddedResource Remove="Resources\Sounds\WaveCannonCharge.ogg" />
@@ -66,12 +72,9 @@
     <ItemGroup Condition="'$(SfxBundledSounds)' != ''">
         <EmbeddedResource Remove="$(SfxBundledSounds)" />
     </ItemGroup>
-    <!-- Android: the desktop-only media stays out of the mobile DLL. The BGM AssetBundle is a
-         Windows build (an arm64 bundle replaces it later), the raw .ogg tracks only back that
-         bundle, and the menu fire video plays from its frame pack (.ekfp) on Android. -->
+    <!-- Android: the desktop-only media stays out of the mobile DLL. The Windows AssetBundles are
+         replaced by arm64 ones below, and the menu fire video plays from its frame pack (.ekfp) on Android. -->
     <ItemGroup Condition="'$(Configuration)' == 'Android'">
-        <EmbeddedResource Remove="Resources\Sounds\BGM\*.ogg" />
-        <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.bundle" />
         <EmbeddedResource Remove="Resources\Sounds\endknot_sfx.bundle" />
         <EmbeddedResource Remove="Resources\Images\MainMenu\Dusk\endknot_dusk.bundle" />
         <EmbeddedResource Remove="Resources\Images\Backrooms\endknot_backrooms.bundle" />
@@ -79,13 +82,11 @@
         <EmbeddedResource Remove="Resources\Media\menu_fire.webm" />
     </ItemGroup>
     <!-- The arm64 AssetBundles (tools/build-bgm-bundle.ps1 -Android) take the Windows bundles' place
-         on Android under the same resource names, so BgmBundle / SfxBundle / BackroomsBundle read them
-         unchanged. Missing files just leave the bundle path unavailable (BGM silent, SFX and the
+         on Android under the same resource names, so SfxBundle / BackroomsBundle read them
+         unchanged. Missing files just leave the bundle path unavailable (SFX and the
          Backrooms textures fall back to embedded). -->
     <ItemGroup Condition="'$(Configuration)' == 'Android'">
-        <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.android.bundle" />
         <EmbeddedResource Remove="Resources\Sounds\endknot_sfx.android.bundle" />
-        <EmbeddedResource Include="Resources\Sounds\BGM\endknot_bgm.android.bundle" LogicalName="EndKnot.Resources.Sounds.BGM.endknot_bgm.bundle" Condition="Exists('Resources\Sounds\BGM\endknot_bgm.android.bundle')" />
         <EmbeddedResource Include="Resources\Sounds\endknot_sfx.android.bundle" LogicalName="EndKnot.Resources.Sounds.endknot_sfx.bundle" Condition="Exists('Resources\Sounds\endknot_sfx.android.bundle')" />
         <EmbeddedResource Remove="Resources\Images\Backrooms\endknot_backrooms.android.bundle" />
         <EmbeddedResource Include="Resources\Images\Backrooms\endknot_backrooms.android.bundle" LogicalName="EndKnot.Resources.Images.Backrooms.endknot_backrooms.bundle" Condition="Exists('Resources\Images\Backrooms\endknot_backrooms.android.bundle')" />
@@ -94,7 +95,6 @@
     </ItemGroup>
     <ItemGroup Condition="'$(Configuration)' != 'Android'">
         <EmbeddedResource Remove="Resources\Images\Backrooms\endknot_backrooms.android.bundle" />
-        <EmbeddedResource Remove="Resources\Sounds\BGM\endknot_bgm.android.bundle" />
         <EmbeddedResource Remove="Resources\Fx\endknot_fx.android.bundle" />
         <EmbeddedResource Remove="Resources\Sounds\endknot_sfx.android.bundle" />
         <!-- The menu fire frame pack is the Android replacement for the webm; desktop plays the webm
@@ -155,12 +155,8 @@
         <AssemblyMetadata Include="EndKnotPublicRelease" Value="true"/>
     </ItemGroup>
 
-    <!-- BGM audio files in Resources/Sounds/BGM/ are gitignored (kept out of the public
-         source repo) but ARE embedded into the DLL when present at build time. The
-         canonical release build runs on a self-hosted runner that supplies the files.
-         Public CI builds (GitHub-hosted runners) produce a no-BGM DLL because the files
-         are absent. End users can override the embedded defaults at runtime by dropping
-         their own .ogg / .mp3 / .wav into BepInEx/resources/BGM/. -->
+    <!-- Hosts can override the bundled BGM at runtime by dropping their own .ogg / .mp3 / .wav into
+         BepInEx/resources/BGM/ (see Modules/BGMManager.cs). -->
 
     <ItemGroup>
 		<PackageReference Include="AmongUs.GameLibs.Steam" Version="2026.9.29" PrivateAssets="all" Condition="('$(Configuration)' == 'Release' Or '$(Configuration)' == 'Debug') And '$(GameLibsInteropPath)' == ''" />
@@ -245,5 +241,18 @@
         <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(AndroidApkAssetsDir)" />
         <WriteLinesToFile File="$(AndroidApkAssetsDir)$(AssemblyName).dll.properties" Overwrite="true" Lines="version=$(_PluginVersion);sha256=$([System.String]::Copy('$(_PluginSha256)').ToLowerInvariant())" />
         <Message Importance="high" Text="Android APK assets: $(AssemblyName).dll $(_PluginVersion) sha256=$(_PluginSha256)" />
+    </Target>
+    <!-- The bundled BGM data (EndKnot.Music.dll, built separately for Android) goes into the APK next to the plugin
+         when its path is given: dotnet build -c Android -p:EndKnotMusicDll=<path to EndKnot.Music.dll> -->
+    <Target Name="AndroidApkMusicPack" AfterTargets="AndroidApkAssets" Condition="'$(Configuration)' == 'Android' And '$(EndKnotMusicDll)' != '' And Exists('$(EndKnotMusicDll)')">
+        <GetAssemblyIdentity AssemblyFiles="$(EndKnotMusicDll)">
+            <Output TaskParameter="Assemblies" ItemName="_MusicAssemblyIdentity" />
+        </GetAssemblyIdentity>
+        <GetFileHash Files="$(EndKnotMusicDll)" Algorithm="SHA256" HashEncoding="hex">
+            <Output TaskParameter="Hash" PropertyName="_MusicSha256" />
+        </GetFileHash>
+        <Copy SourceFiles="$(EndKnotMusicDll)" DestinationFiles="$(AndroidApkAssetsDir)EndKnot.Music.dll" />
+        <WriteLinesToFile File="$(AndroidApkAssetsDir)EndKnot.Music.dll.properties" Overwrite="true" Lines="version=%(_MusicAssemblyIdentity.Version);sha256=$([System.String]::Copy('$(_MusicSha256)').ToLowerInvariant())" />
+        <Message Importance="high" Text="Android APK assets: EndKnot.Music.dll sha256=$(_MusicSha256)" />
     </Target>
 </Project>

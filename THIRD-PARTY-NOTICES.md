@@ -77,8 +77,16 @@ source, are credited in the README credit list instead of this table.
 ライセンスはそのまま引き継がれます（全文は [`LICENSE`](./LICENSE)）。他 Mod を参考にしつつ
 書き起こした機能は、この表ではなく README のクレジット一覧に記載しています。
 
-Bundled audio, sound-effect and video assets are credited in [`README.md`](./README.md#クレジット) /
+Bundled video assets are credited in [`README.md`](./README.md#クレジット) /
 [`README-EN.md`](./README-EN.md#credits).
+
+The release packages also contain `BepInEx/plugins/EndKnot.Music.dll`, the bundled BGM. It holds only music
+data (no code), is a separate work that is not covered by the GPL-3.0, and comes with its own license and
+credits inside the file. End K not reads it as data when it is present and runs without it.
+
+配布物には同梱の BGM `BepInEx/plugins/EndKnot.Music.dll` も入っています。曲のデータだけ (コードは無し) を収めた
+GPL-3.0 の対象外の別の著作物で、ライセンスとクレジットはファイルの中にあります。End K not はこれがあればデータとして読み、
+無くても動きます。
 
 ---
 
