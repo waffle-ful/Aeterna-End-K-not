@@ -460,6 +460,8 @@ tools/InteropWbPatch/bin/
 tools/InteropWbPatch/obj/
 # ...and the Il2CppInterop pointer-cache patcher, applied after the write-barrier patcher.
 !tools/InteropPtrCachePatch/
+# ...and the sound-effect synthesizer (reproduces the synthesized WAV effects under Resources/Sounds).
+!tools/SfxSynth/
 tools/InteropPtrCachePatch/bin/
 tools/InteropPtrCachePatch/obj/
 # ...and the Il2CppInterop source patch and build script (reproduce packaging/il2cppinterop/ from public source).
@@ -510,23 +512,14 @@ Modules/LocalDevOverride.Local.cs
 # It is built and distributed on its own, not through this repository.
 CTA/
 
-# BGM audio files — embedded into the DLL at build, not redistributed as source
-# files. The DLL decodes them in memory and never writes them to disk.
-# bgm_titles.json is kept for attribution metadata.
-Resources/Sounds/BGM/*.ogg
-Resources/Sounds/BGM/*.mp3
-Resources/Sounds/BGM/*.wav
-Resources/Sounds/BGM/*.flac
+# The bundled BGM is packaged separately as EndKnot.Music.dll; local track files are not part of this repository.
+Resources/Sounds/BGM/
 
-# Backrooms ambient sound assets — embedded into the DLL at build, not redistributed.
+# Local sound files. The WAV effects (including tools/SfxSynth output) are tracked.
 Resources/Sounds/Backrooms/*.wav
+!Resources/Sounds/Backrooms/lobby-ambient.wav
 Resources/Sounds/Backrooms/*.ogg
 Resources/Sounds/Backrooms/*.mp3
-
-# Sound effects directly under Resources/Sounds/ (AudienceShock / WaveCannonCharge /
-# WaveCannonFire / Earthquake). Same rule as the BGM above — the BGM/ and Backrooms/
-# patterns do not reach this directory, so it needs its own lines. The
-# upstream-inherited *.wav here stay tracked.
 Resources/Sounds/*.ogg
 Resources/Sounds/*.mp3
 
