@@ -3034,6 +3034,7 @@
   "CultistCharmMax": "最大の魅了の回数",
   "CultistCharmedPlayer": "プレイヤーの魅了に成功",
   "CultistInvalidTarget": "ターゲットを魅了できない",
+  "CultistPressAgainToKill": "もう一度押すとキル",
   "CultistKillButtonText": "魅了",
   "CultistKnowTargetRole": "<color=#cf6acd>魅了対象</color>の役職を確認できる",
   "CultistTargetKnowOtherTarget": "<color=#cf6acd>魅了対象</color>同士はお互いを認識できる",

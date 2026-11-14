@@ -3624,6 +3624,7 @@
   "CultistCharmMax": "Maximum Number Of Charm",
   "CultistCharmedPlayer": "You successfully charmed a player",
   "CultistInvalidTarget": "Target cannot be charmed",
+  "CultistPressAgainToKill": "Press again to kill",
   "CultistKillButtonText": "Charm",
   "CultistKnowTargetRole": "Know <color=#cf6acd>Charmed</color> Player's Role",
   "CultistTargetKnowOtherTarget": "<color=#cf6acd>Charmed</color> players know each other",

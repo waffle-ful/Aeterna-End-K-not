@@ -127,7 +127,10 @@ public class Cultist : RoleBase
         }
 
         if (killer.GetAbilityUseLimit() < 1) return true;
-        return killer.CheckDoubleTrigger(target, () => Charm(killer, target));
+        bool firstPress = !DoubleTrigger.FirstTriggerTimer.ContainsKey(killer.PlayerId);
+        if (killer.CheckDoubleTrigger(target, () => Charm(killer, target))) return true;
+        if (firstPress) killer.Notify(CustomRoles.Cultist.ColoredTextByRole(GetString("CultistPressAgainToKill")), 1.5f);
+        return false;
     }
 
     private static void Charm(PlayerControl killer, PlayerControl target)
