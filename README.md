@@ -437,13 +437,15 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 もっぴーさうんど様・こおろぎ様・蒲鉾さちこ様の BGM を使っています
 - [OpenTracks (旧 DOVA-SYNDROME)](https://opentracks.com/)
 
+Naipak Maksym様の BGM を使っています
+- [Audiostock](https://audiostock.jp/)
+
+Iuvenis様・RibhavAgrawal様の BGM を使っています
+- [Pixabay](https://pixabay.com/)
+
 ### 効果音
 
 一部の効果音は `tools/SfxSynth` で合成しています。
-
-### 動画素材クレジット
-
-- [みりんの動画素材](https://miirriin.com/)
 
 </details>
 

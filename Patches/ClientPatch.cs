@@ -78,16 +78,12 @@ internal static class SplashLogoAnimatorPatch
         __instance.startedSceneLoad = true;
         BootTimeline.Mark("splash.update");
 
-        // PatchPhases.LateSplashWork=false (or forced off by env var): 元の挙動どおり、火の prewarm
-        // とパッチ pump をこのスプラッシュフレームから直接進める -- CalamityFire.Prewarm() 単体で
-        // 約270ms、続く最初の PatchPhases.Pump 呼び出しで約110msのメインスレッド停止がこの1フレームに
-        // 集中する。true の場合はどちらも SplashLateWork.Tick (opts.prelude.end 以降にだけ動く) へ委ね、
-        // CalamityFire.Tick() も SplashLateWork 側が毎フレーム回すので、ここでは何もしない。
+        // PatchPhases.LateSplashWork=false (or forced off by env var): 元の挙動どおり、パッチ pump を
+        // このスプラッシュフレームから直接進める -- 最初の PatchPhases.Pump 呼び出しで約110msの
+        // メインスレッド停止がこの1フレームに集中する。true の場合は SplashLateWork.Tick
+        // (opts.prelude.end 以降にだけ動く) へ委ねるので、ここでは何もしない。
         if (!EndKnot.Modules.PatchPhases.LateSplashWork)
         {
-            EndKnot.Patches.CalamityMenu.CalamityFire.Prewarm();
-            // InnerNetClient.FixedUpdate はメニュー到達後に初めて回るため、スプラッシュ中の準備進行 (テクスチャ生成) はここから進める。
-            EndKnot.Patches.CalamityMenu.CalamityFire.Tick();
             // スプラッシュは静止画なので、後回しにしたパッチの適用をここで進めておくと
             // メニュー到達時の分割適用 (フレーム落ち) を減らせる。
             EndKnot.Modules.PatchPhases.Pump(30f);
@@ -105,7 +101,7 @@ internal static class SplashLateWorkPatch
 }
 
 // PatchPhases.LateSplashWork=true のときの splash 時 prewarm/pump 駆動。opts.prelude.end の Mark から
-// メニュー到達までの主スレッドが空いている区間だけで、CalamityFire.Prewarm() とパッチ pump を進める。
+// メニュー到達までの主スレッドが空いている区間だけで、パッチ pump を進める。
 // opts.prelude.end が何らかの理由で刻まれない起動 (オプション prelude の例外など) でも prewarm/pump が
 // 置き去りにならないよう、最初の Tick から FallbackSeconds 経過で待たずに始める。
 internal static class SplashLateWork
@@ -113,7 +109,6 @@ internal static class SplashLateWork
     private const float FallbackSeconds = 6f;
 
     private static bool _started;
-    private static bool _fireErrored;
     private static bool _pumpErrored;
     private static float _firstTickRealtime = -1f;
 
@@ -141,20 +136,10 @@ internal static class SplashLateWork
         if (_firstTickRealtime < 0f) _firstTickRealtime = now;
         if (!BootTimeline.PreludeEnded && now - _firstTickRealtime < FallbackSeconds) return;
 
-        try
+        if (!_started)
         {
-            if (!_started)
-            {
-                _started = true;
-                BootTimeline.Mark(BootTimeline.PreludeEnded ? "latework.begin" : "latework.fallback");
-                EndKnot.Patches.CalamityMenu.CalamityFire.Prewarm();
-            }
-
-            EndKnot.Patches.CalamityMenu.CalamityFire.Tick();
-        }
-        catch (Exception e)
-        {
-            if (!_fireErrored) { _fireErrored = true; Logger.Error(e.ToString(), "SplashLateWork.Fire"); }
+            _started = true;
+            BootTimeline.Mark(BootTimeline.PreludeEnded ? "latework.begin" : "latework.fallback");
         }
 
         try { EndKnot.Modules.PatchPhases.Pump(EndKnot.Modules.PatchPhases.LateSplashPumpMs); }

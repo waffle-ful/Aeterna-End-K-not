@@ -332,7 +332,6 @@ public class Main : BasePlugin
     public static ConfigEntry<bool> ForceDisableIncrementalGc { get; private set; }
     public static ConfigEntry<bool> LoadingVideoEnabled { get; private set; }
     public static ConfigEntry<string> LoadingVideoFile { get; private set; }
-    public static ConfigEntry<bool> MenuFireEnabled { get; private set; }
     public static ConfigEntry<bool> DeferredPatching { get; private set; }
     public static ConfigEntry<bool> BatchedPatching { get; private set; }
     public static ConfigEntry<bool> DelegateTypeCache { get; private set; }
@@ -704,7 +703,6 @@ public class Main : BasePlugin
         ForceDisableIncrementalGc = Config.Bind("Client Options", "ForceDisableIncrementalGc", false, "Force Unity's incremental GC off. By default incremental GC is left ON only when the bundled BepInEx/core/Il2CppInterop.Runtime.dll is the write-barrier patched build (IL2CPP.WbStore exists) on a 64-bit Windows process; otherwise it is turned off at startup by zeroing the Boehm flag that il2cpp_gc_is_incremental() reads (see Modules/IncrementalGcInvalidator.cs). Off removes the GC use-after-free hazard of barrier-less interop writes (coreclr AV 0xc0000005, a fail-fast process death that try/catch cannot stop) whatever the interop build is; with the patched runtime the barriers are in place, so incremental GC is safe and splits the periodic collection into 3ms slices (measured: longest frame in a match ~30ms -> ~24ms, 1% low +1.5fps). Set true to force it off anyway (e.g. to A/B). Windows-only. Result is logged as INCGC:.");
         LoadingVideoEnabled = Config.Bind("Client Options", "LoadingVideoEnabled", true, "Play a short loading-screen video (host-local, no network traffic) over the fade-to-black during scene transitions (game start / next game). Falls back silently to no video if no file is available.");
         LoadingVideoFile = Config.Bind("Client Options", "LoadingVideoFile", "", "Optional file name (relative to BepInEx/plugins/EndKnot/Media/) or absolute path of a custom loading-screen video (.mp4) or frame pack (.ekfp) to use instead of the bundled frame pack. A video keeps about 50MB of GPU driver memory in use after it has played.");
-        MenuFireEnabled = Config.Bind("Client Options", "MenuFireEnabled", true, "Show the animated fire effect on the main menu background (host-local, no network traffic).");
         DeferredPatching = Config.Bind("Client Options", "DeferredPatching", true, "Apply in-game Harmony patches during the splash screen instead of during startup (faster boot). Turn off if the main menu misbehaves; combine with BatchedPatching=false and DelegateTypeCache=false for the plain PatchAll path.");
         BatchedPatching = Config.Bind("Client Options", "BatchedPatching", true, "Compile each patched game method once per startup phase instead of once per patch class (faster boot). Turn off if a patch silently stops working.");
         DelegateTypeCache = Config.Bind("Client Options", "DelegateTypeCache", true, "Reuse one delegate type per signature for Harmony native trampolines instead of loading a new assembly per patched method (much faster boot). Affects every Harmony user in the process. Turn off if patches fail to apply.");
@@ -763,6 +761,7 @@ public class Main : BasePlugin
         // BepInEx/resources/ へ展開していた生ファイルを 1 回だけ掃除する (ディスク優先ルールにより
         // 残しておくと新しい経路が一生使われないため)。
         BundledAudioCleanup.Run();
+        Patches.CalamityMenu.CalamityFire.RemoveLegacyExtractedVideo();
 
         // incremental GC の実行時制御 (Client Options.ForceDisableIncrementalGc)。ゲームプレイが始まる前・
         // interop 経由のフィールド書き込みが起きる前に決着させる必要があるのでここで呼ぶ。

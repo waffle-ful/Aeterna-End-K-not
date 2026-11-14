@@ -435,13 +435,15 @@ BGM by **自称芸術家みーさん (Miisan)**
 BGM by **もっぴーさうんど (Moppy Sound)**, **こおろぎ (Kohrogi)**, **蒲鉾さちこ (Kamaboko Sachiko)**
 - [OpenTracks (formerly DOVA-SYNDROME)](https://opentracks.com/)
 
+BGM by **Naipak Maksym**
+- [Audiostock](https://audiostock.jp/)
+
+BGM by **Iuvenis**, **RibhavAgrawal**
+- [Pixabay](https://pixabay.com/)
+
 ### Sound effects
 
 Some sound effects are synthesized by `tools/SfxSynth`.
-
-### Video asset credits
-
-- [みりんの動画素材 (Miirriin)](https://miirriin.com/)
 
 </details>
 

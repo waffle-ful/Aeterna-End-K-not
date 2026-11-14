@@ -65,7 +65,6 @@ public static class CalamityMenuPatch
         SafeStep("Suppressor",  () => VanillaSuppressor.Apply(__instance));
         // 夕暮れの廃墟 (CalamityDusk) が組めなかった時だけ旧背景 (写真 + 炎動画 + 流星) に戻す
         SafeStep("Background",  () => { if (!CalamityDusk.Build(MenuRoot.GetLayer("BackgroundLayer"))) CalamityBackground.Build(MenuRoot.GetLayer("BackgroundLayer")); });
-        SafeStep("Fire",        () => { if (!CalamityDusk.Built) CalamityFire.Build(MenuRoot.GetLayer("BackgroundLayer")); });
         SafeStep("Particles",   () => CalamityParticles.Init(MenuRoot.GetLayer("ParticleLayer")));
         SafeStep("Sky",         () => { if (!CalamityDusk.Built) CalamitySky.Init(MenuRoot.GetLayer("ParticleLayer")); });
         SafeStep("Logo",        () => CalamityLogo.Build(MenuRoot.GetLayer("LogoLayer")));
