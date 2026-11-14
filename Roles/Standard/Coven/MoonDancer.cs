@@ -76,7 +76,7 @@ public class MoonDancer : CovenBase
             return false;
         }
 
-        if (killer.CheckDoubleTrigger(target, GiveAddon))
+        if (killer.CheckDoubleTrigger(target, GiveAddon, hintKey: HasNecronomicon ? "DoubleTriggerPressAgainToKill" : "MoonDancerPressAgainToSteal"))
         {
             if (HasNecronomicon && !StealAllAddonsOnKill.GetBool()) return true;
             PlayerState state = Main.PlayerStates[target.PlayerId];

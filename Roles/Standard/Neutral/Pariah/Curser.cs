@@ -79,7 +79,7 @@ public class Curser : RoleBase
 
     public override bool OnCheckMurder(PlayerControl killer, PlayerControl target)
     {
-        if (killer.CheckDoubleTrigger(target, () =>
+        if (killer.CheckDoubleTrigger(target, hintKey: "CurserPressAgainToCurse", firstAction: () =>
         {
             KnownFactionPlayers.Add(target.PlayerId);
             Utils.SendRPC(CustomRPC.SyncRoleData, killer.PlayerId, target.PlayerId);

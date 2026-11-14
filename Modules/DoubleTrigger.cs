@@ -28,7 +28,8 @@ internal static class DoubleTrigger
     ///     Returns true if the kill button is clicked twice within 1 second. Otherwise, does the Action specified in the
     ///     parameter firstAction and returns false
     /// </returns>
-    public static bool CheckDoubleTrigger(this PlayerControl killer, PlayerControl target, Action firstAction, bool doAction = true)
+    /// <param name="hintKey">Translation key shown to the killer on the first press (null = no hint)</param>
+    public static bool CheckDoubleTrigger(this PlayerControl killer, PlayerControl target, Action firstAction, bool doAction = true, string hintKey = "DoubleTriggerPressAgainToKill")
     {
         if (FirstTriggerTimer.ContainsKey(killer.PlayerId))
         {
@@ -51,6 +52,9 @@ internal static class DoubleTrigger
         FirstTriggerTimer.Add(killer.PlayerId, 1f);
         FirstTriggerTarget.Add(killer.PlayerId, target.PlayerId);
         if (doAction) FirstTriggerAction.Add(killer.PlayerId, firstAction);
+
+        // The single action only fires after the timer, so the first press gives no feedback on its own.
+        if (hintKey != null) killer.Notify(Translator.GetString(hintKey), 1.5f);
 
         return false;
     }
