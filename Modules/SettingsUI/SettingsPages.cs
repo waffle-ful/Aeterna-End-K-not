@@ -9,8 +9,8 @@ using UnityEngine;
 
 namespace EndKnot.SettingsUI;
 
-// 設定画面の「ゲーム」(本編の設定と EK のゲームのルール) と「全般」(参加の制限・自動の操作など) の頁。
-// 本編の設定か EK の設定かでは分けず、話題で分ける
+// 設定画面の「ゲーム」の頁 (本編の設定・EK のゲームのルール・参加の制限や自動の操作など部屋の全体の設定)。
+// 本編の設定か EK の設定かでは分けず、話題ごとの節で分ける
 internal static class SettingsPages
 {
     public static readonly SectionPage General = new("generalpage", () => Translator.GetString("MenuCat.SystemSettings"),
@@ -140,6 +140,12 @@ internal static class SettingsPages
             foreach (var option in OptionItem.AllOptions)
             {
                 if (option.Tab != tab || option is PresetOptionItem || option == Options.GameMode) continue;
+                // 見出しの無い長い並びは、話題の変わり目の設定から新しい節にする
+                if (option.Parent == null && SectionStarts.TryGetValue(option.Name, out string startKey))
+                {
+                    cur = new SectionPage.Group { Title = Translator.GetString(startKey) };
+                    list.Add(cur);
+                }
                 if (option is TextOptionItem toi && option.Parent == null)
                 {
                     cur = new SectionPage.Group { Title = SectionTitle(option), Color = option.NameColor, Head = toi };
@@ -159,6 +165,31 @@ internal static class SettingsPages
 
     internal static List<SectionPage.Group> GeneralGroups() => SectionsOf(TabGroup.SystemSettings);
 
+    // 見出しの項目を持たない設定の並びを、画面の上だけで節に切る所 (その設定から次の節が始まる)。
+    // 設定の Id と並びは変えない
+    private static readonly Dictionary<string, string> SectionStarts = new()
+    {
+        ["ModLanguage"] = "SettingsUI.Sec.Language",
+        ["KickLowLevelPlayer"] = "SettingsUI.Sec.Join",
+        ["BGMClimaxCount"] = "SettingsUI.Sec.Bgm",
+        ["YouTubeChatEnable"] = "SettingsUI.Sec.Stream",
+        ["OutfitShuffleEnabled"] = "SettingsUI.Sec.OutfitShuffle",
+        ["AutoKickStart"] = "SettingsUI.Sec.AutoKick",
+        ["MinWaitAutoStart"] = "SettingsUI.Sec.AutoStart",
+        ["StreamerMode"] = "SettingsUI.Sec.Spectate",
+        ["AutoPlayAgain"] = "SettingsUI.Sec.Rehost",
+        ["AutoGMPollCommandAfterJoin"] = "SettingsUI.Sec.JoinCommands",
+        ["LowLoadMode"] = "SettingsUI.Sec.Load",
+        ["EndWhenPlayerBug"] = "SettingsUI.Sec.Safety",
+        ["EnableImpostorChat"] = "SettingsUI.Sec.TeamChat",
+        ["AutoDisplayKillLog"] = "SettingsUI.Sec.AfterGame",
+        ["HideGameSettings"] = "SettingsUI.Sec.Names",
+        ["NoGameEnd"] = "SettingsUI.Sec.Other",
+        ["EnableAutoMessage"] = "SettingsUI.Sec.AutoMessage",
+        ["RoleAssigningAlgorithm"] = "SettingsUI.Sec.Assign",
+        ["ServerInviteEnabled"] = "SettingsUI.Sec.Invite",
+    };
+
     private static string SectionTitle(OptionItem option) => option.GetName(disableColor: true).RemoveHtmlTags().Trim('★', ' ');
 
     // ---- ゲーム: ゲームモードの節 → 本編の設定の節 (本編の並びのまま) → EK のゲームのルールの節 ----
@@ -176,6 +207,13 @@ internal static class SettingsPages
             if (g.Opts.Count > 0) list.Add(g);
         }
         list.AddRange(SectionsOf(TabGroup.GameSettings, TabGroup.TaskSettings));
+        // 部屋の全体に掛かる設定 (参加の制限・自動の操作・試合の後の表示など) も同じ頁の後ろに続ける。
+        // 数が多いので最初は畳んでおき、見出しから開く
+        foreach (var g in GeneralGroups())
+        {
+            g.StartFolded = true;
+            list.Add(g);
+        }
         return list;
     }
 

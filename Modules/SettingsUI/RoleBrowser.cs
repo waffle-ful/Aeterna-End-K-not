@@ -997,7 +997,7 @@ internal sealed class RoleBrowser
 
     private static string Join(string a, string b) => $"{a} › {b}";
 
-    // 役職でない設定のまとまり (見出し・色・項目): ゲームの頁・全般の頁・役職の区分の共通の設定
+    // 役職でない設定のまとまり (見出し・色・項目): ゲームの頁・役職の区分の共通の設定
     private static IEnumerable<(string title, Color color, IEnumerable<MenuOpt> opts)> PlainGroups()
     {
         if (VanillaGame.All.Count == 0) VanillaGame.Rebuild();
@@ -1006,10 +1006,6 @@ internal sealed class RoleBrowser
         foreach (var g in SettingsPages.GameGroups())
             yield return (Join(game, g.Title), g.Color == Color.white ? gameColor : g.Color, g.Opts);
 
-        string general = Tr("MenuCat.SystemSettings");
-        var generalColor = SettingsMenuPatch.CatColor(TabGroup.SystemSettings);
-        foreach (var g in SettingsPages.GeneralGroups())
-            yield return (Join(general, g.Title), g.Color == Color.white ? generalColor : g.Color, g.Opts);
 
         foreach (var tab in RoleCatalog.Tabs)
         {

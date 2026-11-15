@@ -17,7 +17,11 @@ internal sealed class SectionPage
         public string Title;
         public Color Color = Color.white;
         public TextOptionItem Head;   // 見出しの項目 (開閉の状態を持つ)・無ければ null
+        public bool StartFolded;      // 最初は畳んでおく (開閉は見出しの項目でなく画面の側で覚える)
         public readonly List<MenuOpt> Opts = new();
+
+        // 開閉を覚える鍵。同じ名前の節 (本編の「会議」と EK の「会議」など) を分けるため最初の行の名前も足す
+        public string Key => Title + "|" + (Opts.Count > 0 ? Opts[0].PlainLabel : "");
     }
 
     // 頁の置き場と大きさ (左の列からの並びを揃える)。右の欄は目次だけなので行の欄を広く取る
@@ -26,6 +30,25 @@ internal sealed class SectionPage
     private static readonly float ListW = (float)Math.Round(W * 0.65f, 2), SideW = W - ListW - 0.15f;
     internal static float RowW => ListW - 0.24f;
     private const float HeadH = 0.4f, BarH = 0.4f, RowPad = OptEditor.PlatePad;
+
+    // 見出しの項目で開閉を覚えない節の、開閉の状態 (true = 畳む)。アプリを閉じるまで覚える
+    private static readonly Dictionary<string, bool> FoldState = new();
+
+    // 1 頁に並べる行の上限。頁は 1 つの SortingGroup で、Unity は中の描画物を 4096 個までしか描かない
+    // (超えると頁が丸ごと消える)。行 1 本は描画物 10 個前後なので、目次や上の段の分を残してこの数で止める
+    private const int RowBudget = 300;
+
+    private static bool IsFolded(Group g)
+    {
+        if (g.Head != null && !g.StartFolded) return g.Head.CollapsesSection;
+        return FoldState.TryGetValue(g.Key, out bool f) ? f : g.StartFolded;
+    }
+
+    private static void SetFolded(Group g, bool folded)
+    {
+        if (g.Head != null && !g.StartFolded) g.Head.CollapsesSection = folded;
+        else FoldState[g.Key] = folded;
+    }
     // 色の決まっていない節の見出しの色 (順に回す)
     private static readonly Color[] HeadPalette =
     {
@@ -42,6 +65,7 @@ internal sealed class SectionPage
     private readonly Action _onBuild;           // 組む前に呼ぶ (項目の作り直しなど)
     private readonly Func<int> _topKey;         // 上の段の見た目が変わる値 (外で変わったら組み直す)
     private int _builtTopKey;
+    private int _rowsShown;                     // 今開いて並べている行の数
     public Func<string> HeroSub;                // 頁の見出しの下の字 (null = 無し)
     private readonly OptEditor _editor;
 
@@ -139,6 +163,7 @@ internal sealed class SectionPage
             top.Align = Align.Start;
             rows.Add(top);
         }
+        int rowsShown = 0;
         foreach (var g in _all)
         {
             var shown = new List<MenuOpt>();
@@ -156,31 +181,40 @@ internal sealed class SectionPage
             if (_entries.Count > 0 || top != null) rows.Add(new Spacer(rowW, 0.16f));
             var accent = g.Color == Color.white ? HeadPalette[_entries.Count % HeadPalette.Length] : g.Color;
             string title = $"{g.Title}  <size=70%><color=#B8C0CC>{string.Format(Translator.GetString("SettingsUI.Count"), values)}</color></size>";
-            bool collapsed = g.Head is { CollapsesSection: true };
-            if (g.Head != null) title = (collapsed ? "▶ " : "▼ ") + title;
+            // どの節も見出しを押すと畳める。開いている行が上限を超える節は畳んで描き、押されたら他の節を畳んでから開く
+            bool folded = IsFolded(g);
+            bool overBudget = !folded && rowsShown + shown.Count > RowBudget;
+            bool collapsed = folded || overBudget;
+            if (!collapsed) rowsShown += shown.Count;
+            title = (collapsed ? "▶ " : "▼ ") + title;
             var headLabel = new Label(title, 1.65f) { Bold = true, Color = Color.Lerp(accent, Color.white, 0.35f), Width = rowW - 0.3f, MinFontSize = 1.1f };
             var headFill = Color.Lerp(accent, new Color(0.08f, 0.09f, 0.11f, 1f), 0.72f);
-            if (g.Head != null)
+            var toggled = g;
+            int need = shown.Count;
+            e.Head = new Button(headLabel, () =>
             {
-                var toggled = g.Head;
-                e.Head = new Button(headLabel, () => { toggled.CollapsesSection = !toggled.CollapsesSection; Rebuild(); })
+                // 開くと上限を超える時は、他の節を畳んでから開く (押しても何も変わらないように見えないように)
+                if (overBudget || (folded && _rowsShown + need > RowBudget))
                 {
-                    Size = new Vector2(rowW, HeadH + 0.06f),
-                    Padding = new Vector2(0.15f, 0.04f),
-                    Color = accent,
-                    Fill = headFill,
-                    Align = Align.Start,
-                };
-            }
-            else
-                e.Head = new Box(headLabel)
-                {
-                    Size = new Vector2(rowW, HeadH + 0.06f),
-                    Padding = new Vector2(0.15f, 0.04f),
-                    Color = accent,
-                    Fill = headFill,
-                    Align = Align.Start,
-                };
+                    foreach (var other in _all)
+                        if (other != toggled) SetFolded(other, true);
+                    SetFolded(toggled, false);
+                    // 他の節が畳まれて位置が大きく動くので、開いた節の見出しを欄の上端へ
+                    string key = toggled.Key;
+                    Rebuild();
+                    Jump(_entries.FindIndex(x => x.Group.Key == key));
+                    return;
+                }
+                SetFolded(toggled, !folded);
+                Rebuild();
+            })
+            {
+                Size = new Vector2(rowW, HeadH + 0.06f),
+                Padding = new Vector2(0.15f, 0.04f),
+                Color = accent,
+                Fill = headFill,
+                Align = Align.Start,
+            };
             rows.Add(e.Head);
             if (collapsed) { _entries.Add(e); continue; }
             // 行ごとに地を交互に濃淡 (横に長い行でも目で追いやすく)
@@ -199,6 +233,7 @@ internal sealed class SectionPage
             }
             _entries.Add(e);
         }
+        _rowsShown = rowsShown;
         _editor.Refresh();
         _list = new ScrollView(new Vector2(ListW, H), rows) { Tag = _tag };
         _screen.Set(new Stack(true, _list, Side(edit)) { Gap = 0.15f, Align = Align.Start });

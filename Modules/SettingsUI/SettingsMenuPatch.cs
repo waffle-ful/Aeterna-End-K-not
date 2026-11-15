@@ -75,10 +75,10 @@ internal static class SettingsMenuPatch
     private const float SearchBoxWidth = 3.4f;
     private const float SearchBoxHeight = 0.42f;
 
-    // 左の列に出す区分 (全般 + 役職の列)。ゲームの設定・タスクの設定は「ゲーム」の頁に、古い役職は各列の末尾に、プリセット エクスプローラーはプリセットの頁にまとめる
+    // 左の列に出す区分 (役職の列)。ゲームの設定・タスクの設定・部屋の全体の設定は「ゲーム」の頁に、古い役職は各列の末尾に、プリセット エクスプローラーはプリセットの頁にまとめる
     private static readonly TabGroup[] ColumnTabs =
     {
-        TabGroup.SystemSettings, TabGroup.ImpostorRoles, TabGroup.CrewmateRoles, TabGroup.NeutralRoles, TabGroup.CovenRoles,
+        TabGroup.ImpostorRoles, TabGroup.CrewmateRoles, TabGroup.NeutralRoles, TabGroup.CovenRoles,
         TabGroup.JackalRoles, TabGroup.Combinations, TabGroup.Addons, TabGroup.OtherRoles,
     };
 
