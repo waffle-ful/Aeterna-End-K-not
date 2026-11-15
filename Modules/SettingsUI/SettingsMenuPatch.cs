@@ -648,6 +648,7 @@ internal static class SettingsMenuPatch
     {
         SettingsUiMode.Latch();
         if (!SettingsUiMode.Active) return true;
+        SettingsTheme.Show(__instance);
 
         if (!templateGameOptionsMenu)
         {
@@ -740,6 +741,7 @@ internal static class SettingsMenuPatch
         searchSeq++;
         SettingsSearchBox.Forget();
         searchQuery = "";
+        SettingsTheme.Hide();
         OpenMenu = null;
     }
 }

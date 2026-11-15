@@ -265,5 +265,6 @@ internal static class SettingsPagesTick
         TextField.Tick();
         RolePage.Tick();
         SettingsCover.Tick();
+        SettingsTheme.Tick();
     }
 }
