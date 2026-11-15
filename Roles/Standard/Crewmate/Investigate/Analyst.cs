@@ -179,7 +179,7 @@ internal class Analyst : RoleBase
         PlayerControl target = Utils.GetPlayerById(CurrentTarget.ID);
         if (target == null) return;
 
-        if (!FastVector2.DistanceWithinRange(target.Pos(), pc.Pos(), pc.Is(CustomRoles.Reach) ? 2.5f : 1.5f))
+        if (!FastVector2.DistanceWithinRange(target.Pos(), pc.Pos(), 1.5f))
         {
             CurrentTarget.ID = byte.MaxValue;
             SendSync();

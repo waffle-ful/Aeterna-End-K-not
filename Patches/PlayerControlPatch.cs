@@ -261,16 +261,6 @@ internal static class CheckMurderPatch
 
             killer.ResetKillCooldown(false);
 
-            if (killer.Is(CustomRoles.SlowStarter) && !SlowStarter.CanKill())
-            {
-                int slowStarterDay = SlowStarter.ActivationDay.GetInt();
-                killer.Notify(slowStarterDay > 0
-                    ? string.Format(Translator.GetString("SlowStarterCannotKillWithDay"), SlowStarter.AliveImpThreshold.GetInt(), slowStarterDay)
-                    : string.Format(Translator.GetString("SlowStarterCannotKill"), SlowStarter.AliveImpThreshold.GetInt()));
-                Logger.Info(killer.GetNameWithRole().RemoveHtmlTags() + " is SlowStarter and cannot kill yet", "CheckMurder");
-                return false;
-            }
-
             if (killer.PlayerId != target.PlayerId && !killer.CanUseKillButton())
             {
                 Logger.Info(killer.GetNameWithRole().RemoveHtmlTags() + " cannot use their kill button, the kill was blocked", "CheckMurder");
@@ -929,7 +919,7 @@ internal static class MurderPlayerPatch
                 if (killer.AmOwner && Main.PlayerStates.TryGetValue(killer.PlayerId, out var ks) && ks.GetKillCount() <= 1)
                     Achievements.Type.OhNo.CompleteAfterGameEnd();
             
-                if (target != killer && !killer.Is(CustomRoles.KillingMachine) && !killer.Is(CustomRoles.Focused) && (killer.PlayerId != target.PlayerId || target.GetRealKiller()?.GetCustomRole() is CustomRoles.Swooper or CustomRoles.Wraith || !killer.Is(CustomRoles.Oblivious) || !Options.ObliviousBaitImmune.GetBool()))
+                if (target != killer && !killer.Is(CustomRoles.KillingMachine) && !killer.Is(CustomRoles.Focused))
                 {
                     killer.RPCPlayCustomSound("Congrats");
                     target.RPCPlayCustomSound("Congrats");
@@ -1571,24 +1561,11 @@ internal static class ReportDeadBodyPatch
                     return false;
                 }
 
-                if (tpc.Is(CustomRoles.Transparent))
-                {
-                    Notify("TargetTransparent");
-                    return false;
-                }
-
                 if (__instance.Is(CustomRoles.NonReport) && NonReport.BlocksReport)
                 {
                     Notify("NonReportCannotReport");
                     return false;
-                }
-
-                if (__instance.Is(CustomRoles.Oblivious))
-                {
-                    Notify("AmOblivious");
-                    return false;
-                }
-            }
+                }            }
 
             if (Options.SyncButtonMode.GetBool() && !target)
             {
@@ -1769,11 +1746,6 @@ internal static class ReportDeadBodyPatch
                 {
                     if (player.Is(CustomRoles.Forensic) && player.PlayerId != target.PlayerId)
                         Forensic.OnReportDeadBody(player, tpc);
-                    else if (player.Is(CustomRoles.Sleuth) && player.PlayerId != target.PlayerId)
-                    {
-                        string msg = string.Format(GetString("SleuthMsg"), tpc.GetRealName(), tpc.GetDisplayRoleName());
-                        Main.SleuthMsgs[player.PlayerId] = msg;
-                    }
 
                     if (player.Is(CustomRoles.MassMedia) && Main.PlayerStates[player.PlayerId].Role is MassMedia massMediaRole)
                         massMediaRole.OnSelfReport(target.PlayerId);
@@ -2087,9 +2059,6 @@ internal static class FixedUpdatePatch
                 {
                     switch (ghostRole.Instance)
                     {
-                        case Warden warden:
-                            warden.Update(__instance);
-                            break;
                         case Haunter haunter:
                             haunter.Update(__instance);
                             break;
@@ -2673,7 +2642,6 @@ internal static class FixedUpdatePatch
                 additionalSuffixes.Add(Bloodmoon.GetSuffix(seer));
                 additionalSuffixes.Add(Haunter.GetSuffix(seer));
                 additionalSuffixes.Add(DemonicTracker.GetSuffix(seer));
-                additionalSuffixes.Add(GhostReseter.GetSuffix(seer));
                 additionalSuffixes.Add(Ghostbuttoner.GetSuffix(seer));
                 additionalSuffixes.Add(DemonicCrusher.GetSuffix(seer));
                 additionalSuffixes.Add(AsistingAngel.GetSuffix(seer));

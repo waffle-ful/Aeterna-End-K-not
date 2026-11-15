@@ -592,7 +592,7 @@ public static class SabotageSystemTypeUpdateSystemPatch
             CustomRoles.Jackal when Jackal.CanSabotage.GetBool() => true,
             CustomRoles.Sidekick when Jackal.CanSabotageSK.GetBool() => true,
             CustomRoles.Traitor when Traitor.CanSabotage.GetBool() => true,
-            CustomRoles.Parasite or CustomRoles.Renegade when player.IsAlive() => true,
+            CustomRoles.Renegade when player.IsAlive() => true,
             _ => Main.PlayerStates[player.PlayerId].Role.CanUseSabotage(player) && Main.PlayerStates[player.PlayerId].Role.OnSabotage(player)
         };
 

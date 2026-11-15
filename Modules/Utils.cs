@@ -1117,7 +1117,6 @@ public static class Utils
             case CustomRoles.Pickpocket:
             case CustomRoles.Maverick:
             case CustomRoles.Jinx:
-            case CustomRoles.Parasite:
             case CustomRoles.Agitator:
             case CustomRoles.Crusader when !Options.UsePets.GetBool() || !Crusader.UsePet.GetBool():
             case CustomRoles.Renegade:
@@ -3632,7 +3631,6 @@ public static class Utils
                     AdditionalSuffixes.Add(Bloodmoon.GetSuffix(seer));
                     AdditionalSuffixes.Add(Haunter.GetSuffix(seer));
                     AdditionalSuffixes.Add(DemonicTracker.GetSuffix(seer));
-                    AdditionalSuffixes.Add(GhostReseter.GetSuffix(seer));
                     AdditionalSuffixes.Add(Ghostbuttoner.GetSuffix(seer));
                     AdditionalSuffixes.Add(DemonicCrusher.GetSuffix(seer));
                     AdditionalSuffixes.Add(AsistingAngel.GetSuffix(seer));
@@ -3941,9 +3939,6 @@ public static class Utils
                             targetIsLover = lovers.Count >= 2 && Lovers.PairIndexOf(target.PlayerId) >= 0;
                             if (targetIsLover && (!seer.IsAlive() || (seerIsLover && Lovers.ArePartners(seer.PlayerId, target.PlayerId))))
                                 TargetMark.Append(CustomRoles.Lovers.ColoredTextByRole(" ♥"));
-
-                            if ((!seer.IsAlive() || seer.Is(CustomRoles.Connecting)) && target.Is(CustomRoles.Connecting))
-                                TargetMark.Append(ColorString(GetRoleColor(CustomRoles.Connecting), " Ψ"));
 
                             if (Twins.ArePartners(seer.PlayerId, target.PlayerId))
                                 TargetMark.Append(ColorString(GetRoleColor(CustomRoles.Twins), " ♊"));
@@ -4281,7 +4276,6 @@ public static class Utils
                (seer.Is(CustomRoleTypes.Impostor) && target.Is(CustomRoles.Crewpostor) && Options.AlliesKnowCrewpostor.GetBool()) ||
                (seer.IsMadmate() && target.IsMadmate() && Options.MadmateKnowWhosMadmate.GetBool()) ||
                (seer.GetCustomRole().IsJackalTeamMember() && target.GetCustomRole().IsJackalTeamMember()) ||
-               ((!seer.IsAlive() || seer.Is(CustomRoles.Connecting)) && target.Is(CustomRoles.Connecting)) ||
                Twins.ArePartners(seer.PlayerId, target.PlayerId) ||
                Faction.AreAllies(seer, target) ||
                (target.Is(CustomRoles.Workaholic) && Workaholic.WorkaholicVisibleToEveryone.GetBool()) ||
@@ -4747,7 +4741,6 @@ public static class Utils
             CustomRoles.Atlas => Atlas.FixedAbilityCooldown,
             CustomRoles.Vacuum => Vacuum.AbilityCooldown.GetInt() + (includeDuration ? Vacuum.AbilityDuration.GetInt() : 0),
             CustomRoles.TimeMaster => TimeMaster.TimeMasterSkillCooldown.GetInt(),
-            CustomRoles.Perceiver => Perceiver.CD.GetInt(),
             CustomRoles.Convener => Convener.CD.GetInt(),
             CustomRoles.Pacifist => Options.PacifistCooldown.GetInt(),
             CustomRoles.Alchemist => Alchemist.VentCooldown.GetInt(),
@@ -4783,7 +4776,6 @@ public static class Utils
             CustomRoles.Stasis => Stasis.AbilityCooldown.GetInt() + (includeDuration ? Stasis.AbilityDuration.GetInt() : 0),
             CustomRoles.Swiftclaw => Swiftclaw.DashCD.GetInt() + (includeDuration ? Swiftclaw.DashDuration.GetInt() : 0),
             CustomRoles.Hypnotist => Hypnotist.AbilityCooldown.GetInt() + (includeDuration ? Hypnotist.AbilityDuration.GetInt() : 0),
-            CustomRoles.Parasite => (int)Parasite.SSCD + (includeDuration ? (int)Parasite.SSDur : 0),
             CustomRoles.Tiger => Tiger.EnrageCooldown.GetInt() + (includeDuration ? Tiger.EnrageDuration.GetInt() : 0),
             CustomRoles.Nonplus => Nonplus.BlindCooldown.GetInt() + (includeDuration ? Nonplus.BlindDuration.GetInt() : 0),
             CustomRoles.Amogus => Amogus.AbilityCooldown.GetInt() + (includeDuration ? Amogus.AbilityDuration.GetInt() : 0),
@@ -4799,7 +4791,6 @@ public static class Utils
             CustomRoles.CharismaStar => CharismaStar.GatherCooldown.GetInt(),
             CustomRoles.EvilBlender => EvilBlender.AbilityCooldown.GetInt(),
             CustomRoles.Archer => Archer.AbilityCooldown.GetInt(),
-            CustomRoles.EvilMaker => EvilMaker.AbilityCooldown.GetInt(),
             CustomRoles.ToiletFan => (int)ToiletFan.Cooldown.GetFloat(),
             CustomRoles.UltraStar => (int)UltraStar.PetCooldownOpt.GetFloat(),
             CustomRoles.Sandbox => (int)Sandbox.PlaceCooldown.GetFloat(),
@@ -5105,14 +5096,13 @@ public static class Utils
 
             // EKR logic: on_death (自分が死んだとき・ctx=キルした人)。
             // disconnect 経由の死亡は target の PlayerControl がこの後ろで破棄されうるため対象外にする
-            // (Stained.OnDeath 等、既存の同種フックと同じ !disconnect ガード)。
+            // (ほかの死亡時フックと同じ !disconnect ガード)。
             // R2 (契約 §3b): 死因を 8 バケットへ畳んで渡す (on_death の cause フィルタ用)。
             if (!disconnect) EkrManager.FireDeath(target, targetRealKiller, Main.PlayerStates.TryGetValue(target.PlayerId, out PlayerState ekrState) ? ekrState.deathReason : PlayerState.DeathReason.etc);
 
             if (!disconnect && !onMeeting) Randomizer.OnAnyoneDeath(target);
             if (Executioner.Target.ContainsValue(target.PlayerId)) Executioner.ChangeRoleByTarget(target);
             if (Lawyer.Target.ContainsValue(target.PlayerId)) Lawyer.ChangeRoleByTarget(target);
-            if (!disconnect && !onMeeting && target.Is(CustomRoles.Stained)) Stained.OnDeath(target, targetRealKiller);
             if (!disconnect && target.Is(CustomRoles.Spurt)) Spurt.DeathTask(target);
 
             Postman.CheckAndResetTargets(target, !onMeeting && !disconnect);

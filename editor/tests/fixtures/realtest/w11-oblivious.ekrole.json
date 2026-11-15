@@ -21,7 +21,7 @@
           {
             "op": "addon_give",
             "target": "nearest",
-            "addon": "Oblivious"
+            "addon": "NonReport"
           },
           {
             "op": "notify",

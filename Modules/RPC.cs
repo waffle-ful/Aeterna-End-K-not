@@ -1444,13 +1444,6 @@ internal static class RPCHandlerPatch
                     covenRole.HasNecronomicon = true;
                     break;
                 }
-                case CustomRPC.Stained:
-                {
-                    byte id = reader.ReadByte();
-                    Stained.VioletNameList.Add(id);
-                    LateTask.New(() => Stained.VioletNameList.Remove(id), 3f);
-                    break;
-                }
                 case CustomRPC.SyncLobbyState:
                 {
                     int killerCount = reader.ReadPackedInt32();

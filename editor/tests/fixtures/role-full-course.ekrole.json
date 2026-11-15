@@ -91,7 +91,7 @@
           { "op": "speed", "mult": 1.5, "seconds": 5 },
           { "op": "notify", "text": "また一人、闇へ", "seconds": 3 },
           { "op": "reveal", "target": "ctx" },
-          { "op": "addon_give", "target": "ctx", "addon": "Oblivious" }
+          { "op": "addon_give", "target": "ctx", "addon": "NonReport" }
         ]
       },
       {
@@ -305,7 +305,7 @@
         "do": [
           { "op": "var_set", "name": "うらみ", "value": { "e": "lit", "v": 0 } },
           { "op": "notify", "text": "また、動ける…", "seconds": 3 },
-          { "op": "addon_remove", "target": "self", "addon": "Oblivious" }
+          { "op": "addon_remove", "target": "self", "addon": "NonReport" }
         ]
       },
       {

@@ -51,7 +51,6 @@ internal static class TargetArrow
     /// <param name="target"></param>
     public static void Add(byte seer, byte target)
     {
-        if (Main.PlayerStates.TryGetValue(seer, out var state) && state.SubRoles.Contains(CustomRoles.Blind)) return;
         
         ArrowInfo arrowInfo = new(seer, target);
 
@@ -141,14 +140,6 @@ internal static class TargetArrow
         }
         int arrowCount = ArrowList.Count;
         if (arrowCount == 0) return;
-
-        // Blind は Add でしか検査していないため、ゲーム途中で付与されると登録済みの矢印が残り続ける
-        if (Main.PlayerStates.TryGetValue(seer.PlayerId, out var seerState) && seerState.SubRoles.Contains(CustomRoles.Blind))
-        {
-            RemoveAllTarget(seer.PlayerId);
-            Utils.NotifyRoles(SpecifySeer: seer, ForceLoop: false, SpecifyTarget: seer);
-            return;
-        }
 
         var update = false;
 

@@ -697,8 +697,7 @@ internal static class BeginCrewmatePatch
                     => HudManager.Instance.TaskCompleteSound,
 
                 CustomRoles.Bestower or
-                    CustomRoles.Helper or
-                    CustomRoles.TaskManager
+                    CustomRoles.Helper
                     => HudManager.Instance.TaskUpdateSound,
 
                 CustomRoles.ClockBlocker or

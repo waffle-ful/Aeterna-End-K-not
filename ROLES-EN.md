@@ -2,24 +2,24 @@
 
 [日本語](ROLES.md) ・ [← Back to README](README-EN.md)
 
-**703 roles in total** (553 faction roles + 150 sub-roles/add-ons), organized by faction.
+**681 roles in total** (546 faction roles + 135 sub-roles/add-ons), organized by faction.
 
 Most of the roles listed here come from the base mod [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) and earlier mods in the scene such as the TownOfHost lineage. Some carry over the original implementation; others were rewritten with reference to it. The "from …" under each role names the mod that first implemented it. Credits for each project are collected in the [README](README-EN.md#credits).
 
 | Faction | Count |
 |---------|-------|
-| Impostor | 173 (vanilla 4 + remake 4 + custom 165) |
-| Crewmate | 179 (vanilla 6 + remake 7 + custom 166) |
+| Impostor | 169 (vanilla 4 + remake 4 + custom 161) |
+| Crewmate | 176 (vanilla 6 + remake 7 + custom 163) |
 | Neutral | 141 |
 | Coven | 21 |
 | Combination roles | 8 (dealt in pairs) |
 | Game mode exclusive | 28 |
 | Other | 3 (GM / Convict / Emptiness) |
-| Sub-roles (add-ons) | 150 |
+| Sub-roles (add-ons) | 135 |
 
 Use `/r <role name>` or `/myrole` in-game to check each role's effects and settings.
 
-### Impostor (173)
+### Impostor (169)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -30,25 +30,24 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Anonymous<br><sub>From:EndlessHostRoles</sub> | Abyssbringer<br><sub>From:EndlessHostRoles</sub> | Arrogance<br><sub>From:TownOfHost E</sub> | Undertaker<br><sub>From:TownOfUs</sub> |
 | AntiAdminer<br><sub>From:TownOfHost_Y</sub> | AntiReporter<br><sub>From:TownOfHost-K</sub> | Android<br><sub>From:TownOfHost-K</sub> | EvilGambler<br><sub>From:SuperNewRoles</sub> |
 | EvilSatellite<br><sub>From:TownOfHost-K</sub> | EvilJumper<br><sub>From:TownOfHost-K</sub> | EvilTeller<br><sub>From:TownOfHost-K</sub> | EvilBlender<br><sub>From:TownOfHost-K</sub> |
-| EvilBomber<br><sub>From:TownOfHost-K</sub> | EvilMagician<br><sub>From:TownOfHost-K</sub> | EvilMaker<br><sub>From:TownOfHost-K</sub> | EvilEraser<br><sub>From:TheOtherRoles</sub> |
-| EvilGuesser<br><sub>From:TheOtherRoles</sub> | EvilTracker<br><sub>From:TOR GM Haoming</sub> | Insider<br><sub>From:TownOfHost</sub> | Inhibitor<br><sub>From:EndlessHostRoles</sub> |
-| Impostor | ImpostorEndKnot | Vampire<br><sub>From:TheOtherRoles</sub> | Vindicator<br><sub>From:EndlessHostRoles</sub> |
-| Walker<br><sub>From:TownOfHost-K</sub> | Warlock<br><sub>From:TheOtherRoles</sub> | Echo<br><sub>From:EndlessHostRoles</sub> | Escapist<br><sub>From:TownOfUs</sub> |
-| Augmenter<br><sub>From:EndlessHostRoles</sub> | Overkiller<br><sub>From:SuperNewRoles</sub> | Overheat<br><sub>From:EndlessHostRoles</sub> | Occultist<br><sub>From:TownOfHost Re-Edited</sub> |
-| Comebacker<br><sub>From:TownOfHost-K</sub> | Camouflager<br><sub>From:TheOtherRoles</sub> | CharismaStar<br><sub>From:TownOfHost_Y</sub> | Gangster<br><sub>From:TownOfHost E</sub> |
-| Cantankerous<br><sub>From:EndlessHostRoles</sub> | Gambler<br><sub>From:EndlessHostRoles</sub> | QuickKiller<br><sub>From:TownOfHost-K</sub> | Greedy<br><sub>From:TownOfHost_Y</sub> |
-| Cleaner<br><sub>From:TheOtherRoles</sub> | Crewpostor<br><sub>From:TownOfHost E</sub> | Chronomancer<br><sub>From:TownOfHost Re-Edited</sub> | Godfather<br><sub>From:TheOtherRoles</sub> |
-| ConnectSaver<br><sub>From:TownOfHost-K</sub> | Consigliere<br><sub>From:EndlessHostRoles</sub> | Silencer<br><sub>From:Project Lotus</sub> | Sapper<br><sub>From:EndlessHostRoles</sub> |
-| Satellite<br><sub>From:TownOfHost-K</sub> | Saboteur<br><sub>From:EndlessHostRoles</sub> | Shapeshifter | ShapeshifterEndKnot |
-| Generator<br><sub>From:EndlessHostRoles</sub> | Shyboy<br><sub>From:TownOfHost-K</sub> | Swiftclaw<br><sub>From:EndlessHostRoles</sub> | Swooper<br><sub>From:TownOfUs</sub> |
-| Scavenger<br><sub>From:TownOfHost_Y</sub> | Wasp<br><sub>From:EndlessHostRoles</sub> | Stasis<br><sub>From:EndlessHostRoles</sub> | Stealth<br><sub>From:TownOfHost</sub> |
-| Sniper<br><sub>From:NebulaontheShip</sub> | Snowman<br><sub>From:TownOfHost-K</sub> | Swapster<br><sub>From:EndlessHostRoles</sub> | SoulCatcher<br><sub>From:TownOfHost E</sub> |
-| Zombie<br><sub>From:TownOfHost E</sub> | TimeThief<br><sub>From:TownOfHost</sub> | Dazzler<br><sub>From:TownOfHost Re-Edited</sub> | Changeling<br><sub>From:StellarRoles</sub> |
-| Twister<br><sub>From:TownOfHost Re-Edited</sub> | Disperser<br><sub>From:TownOfUs</sub> | Decrescendo<br><sub>From:TownOfHost-K</sub> | Deathpact<br><sub>From:TownOfHost Re-Edited</sub> |
-| Duellist<br><sub>From:EndlessHostRoles</sub> | TeleportKiller<br><sub>From:TownOfHost-K</sub> | ToiletFan<br><sub>From:SuperNewRoles</sub> | Trapster<br><sub>From:EndlessHostRoles</sub> |
-| Trickster<br><sub>From:EndlessHostRoles</sub> | NiceLogger<br><sub>From:TownOfHost-K</sub> | Nuker<br><sub>From:TownOfHost E</sub> | Ninja<br><sub>From:TheOtherRoles</sub> |
-| Nemesis<br><sub>From:EndlessHostRoles</sub> | Notifier<br><sub>From:TownOfHost-K</sub> | BountyHunter<br><sub>From:TheOtherRoles</sub> | Puppeteer<br><sub>From:TownOfHost</sub> |
-| Parasite<br><sub>From:EndlessHostRoles</sub> | Ballooner<br><sub>From:TownOfHost-K</sub> | Hangman<br><sub>From:TownOfHost E</sub> | Visionary<br><sub>From:EndlessHostRoles</sub> |
+| EvilBomber<br><sub>From:TownOfHost-K</sub> | EvilMagician<br><sub>From:TownOfHost-K</sub> | EvilEraser<br><sub>From:TheOtherRoles</sub> | EvilGuesser<br><sub>From:TheOtherRoles</sub> |
+| EvilTracker<br><sub>From:TOR GM Haoming</sub> | Insider<br><sub>From:TownOfHost</sub> | Inhibitor<br><sub>From:EndlessHostRoles</sub> | Impostor |
+| ImpostorEndKnot | Vampire<br><sub>From:TheOtherRoles</sub> | Vindicator<br><sub>From:EndlessHostRoles</sub> | Walker<br><sub>From:TownOfHost-K</sub> |
+| Warlock<br><sub>From:TheOtherRoles</sub> | Echo<br><sub>From:EndlessHostRoles</sub> | Escapist<br><sub>From:TownOfUs</sub> | Augmenter<br><sub>From:EndlessHostRoles</sub> |
+| Overkiller<br><sub>From:SuperNewRoles</sub> | Overheat<br><sub>From:EndlessHostRoles</sub> | Occultist<br><sub>From:TownOfHost Re-Edited</sub> | Camouflager<br><sub>From:TheOtherRoles</sub> |
+| CharismaStar<br><sub>From:TownOfHost_Y</sub> | Gangster<br><sub>From:TownOfHost E</sub> | Cantankerous<br><sub>From:EndlessHostRoles</sub> | Gambler<br><sub>From:EndlessHostRoles</sub> |
+| QuickKiller<br><sub>From:TownOfHost-K</sub> | Greedy<br><sub>From:TownOfHost_Y</sub> | Cleaner<br><sub>From:TheOtherRoles</sub> | Crewpostor<br><sub>From:TownOfHost E</sub> |
+| Chronomancer<br><sub>From:TownOfHost Re-Edited</sub> | Godfather<br><sub>From:TheOtherRoles</sub> | ConnectSaver<br><sub>From:TownOfHost-K</sub> | Consigliere<br><sub>From:EndlessHostRoles</sub> |
+| Silencer<br><sub>From:Project Lotus</sub> | Sapper<br><sub>From:EndlessHostRoles</sub> | Satellite<br><sub>From:TownOfHost-K</sub> | Saboteur<br><sub>From:EndlessHostRoles</sub> |
+| Shapeshifter | ShapeshifterEndKnot | Generator<br><sub>From:EndlessHostRoles</sub> | Shyboy<br><sub>From:TownOfHost-K</sub> |
+| Swiftclaw<br><sub>From:EndlessHostRoles</sub> | Swooper<br><sub>From:TownOfUs</sub> | Scavenger<br><sub>From:TownOfHost_Y</sub> | Wasp<br><sub>From:EndlessHostRoles</sub> |
+| Stasis<br><sub>From:EndlessHostRoles</sub> | Stealth<br><sub>From:TownOfHost</sub> | Sniper<br><sub>From:NebulaontheShip</sub> | Snowman<br><sub>From:TownOfHost-K</sub> |
+| Swapster<br><sub>From:EndlessHostRoles</sub> | SoulCatcher<br><sub>From:TownOfHost E</sub> | Zombie<br><sub>From:TownOfHost E</sub> | TimeThief<br><sub>From:TownOfHost</sub> |
+| Dazzler<br><sub>From:TownOfHost Re-Edited</sub> | Changeling<br><sub>From:StellarRoles</sub> | Twister<br><sub>From:TownOfHost Re-Edited</sub> | Disperser<br><sub>From:TownOfUs</sub> |
+| Deathpact<br><sub>From:TownOfHost Re-Edited</sub> | Duellist<br><sub>From:EndlessHostRoles</sub> | TeleportKiller<br><sub>From:TownOfHost-K</sub> | ToiletFan<br><sub>From:SuperNewRoles</sub> |
+| Trapster<br><sub>From:EndlessHostRoles</sub> | Trickster<br><sub>From:EndlessHostRoles</sub> | NiceLogger<br><sub>From:TownOfHost-K</sub> | Nuker<br><sub>From:TownOfHost E</sub> |
+| Ninja<br><sub>From:TheOtherRoles</sub> | Nemesis<br><sub>From:EndlessHostRoles</sub> | Notifier<br><sub>From:TownOfHost-K</sub> | BountyHunter<br><sub>From:TheOtherRoles</sub> |
+| Puppeteer<br><sub>From:TownOfHost</sub> | Ballooner<br><sub>From:TownOfHost-K</sub> | Hangman<br><sub>From:TownOfHost E</sub> | Visionary<br><sub>From:EndlessHostRoles</sub> |
 | Hitman<br><sub>From:EndlessHostRoles</sub> | Phantom | PhantomEndKnot | Freezer<br><sub>From:Project Lotus</sub> |
 | Framer<br><sub>From:EndlessHostRoles</sub> | ProgressKiller<br><sub>From:TownOfHost-K</sub> | ProBowler<br><sub>From:TownOfHost-K</sub> | Penguin<br><sub>From:SuperNewRoles</sub> |
 | VentOpener<br><sub>From:TownOfHost-K</sub> | VentMaster<br><sub>From:TownOfHost-K</sub> | Bomber<br><sub>From:TownOfHost E</sub> | Miner<br><sub>From:TownOfUs</sub> |
@@ -68,7 +67,7 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Atlas<br><sub>From:ExtremeRoles</sub> | Dominion<br><sub>From:TownOfUs, ExtremeRoles</sub> | Babel<br><sub>From:TownOfHost for E</sub> | Replay |
 | Nova<br><sub>From:UchuAddon</sub> |  |  |  |
 
-### Crewmate (180)
+### Crewmate (177)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -84,39 +83,39 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Sheriff<br><sub>From:SheriffMod</sub> | Shiftguard<br><sub>From:EndlessHostRoles</sub> | Journalist<br><sub>From:EndlessHostRoles</sub> | SuperStar<br><sub>From:TownOfHost E</sub> |
 | Scout<br><sub>From:EndlessHostRoles</sub> | Scanner<br><sub>From:EndlessHostRoles</sub> | Snitch<br><sub>From:TheOtherRoles</sub> | Spy<br><sub>From:EndlessHostRoles</sub> |
 | SpeedBooster<br><sub>From:TownOfHost</sub> | Speedrunner<br><sub>From:Project Lotus</sub> | Spiritualist<br><sub>From:TownOfHost E</sub> | Swapper<br><sub>From:TownOfUs</sub> |
-| Safeguard<br><sub>From:EndlessHostRoles</sub> | Sensor<br><sub>From:EndlessHostRoles</sub> | Tar<br><sub>From:EndlessHostRoles</sub> | TimeMaster<br><sub>From:TooManyRoles</sub> |
-| TimeManager<br><sub>From:TownOfHost</sub> | TaskManager<br><sub>From:TownOfHost_Y</sub> | DoubleAgent<br><sub>From:EndlessHostRoles</sub> | DummySpawner<br><sub>From:SuperNewRoles</sub> |
-| Dictator<br><sub>From:TownOfHost</sub> | Detour<br><sub>From:EndlessHostRoles</sub> | Detective | DetectiveEndKnot |
-| Tether<br><sub>From:EndlessHostRoles</sub> | Telekinetic<br><sub>From:TownOfHost_Y</sub> | Telecommunication<br><sub>From:EndlessHostRoles</sub> | Doorjammer<br><sub>From:EndlessHostRoles</sub> |
-| ToiletMaster<br><sub>From:EndlessHostRoles</sub> | DonutDelivery<br><sub>From:EndlessHostRoles</sub> | Doctor<br><sub>From:NebulaontheShip</sub> | Tracker |
-| TrackerEndKnot | Transporter<br><sub>From:TownOfUs</sub> | Transmitter<br><sub>From:EndlessHostRoles</sub> | Druid<br><sub>From:EndlessHostRoles</sub> |
-| Tornado<br><sub>From:EndlessHostRoles</sub> | Drainer<br><sub>From:EndlessHostRoles</sub> | Tracefinder<br><sub>From:TownOfHost E</sub> | Tunneler<br><sub>From:EndlessHostRoles</sub> |
-| NiceEraser<br><sub>From:EndlessHostRoles</sub> | NiceGuesser<br><sub>From:TheOtherRoles</sub> | Nightmare<br><sub>From:EndlessHostRoles</sub> | Noisemaker |
-| NoisemakerEndKnot | Vacuum<br><sub>From:EndlessHostRoles</sub> | Pacifist<br><sub>From:EndlessHostRoles</sub> | Hacker<br><sub>From:TheOtherRoles</sub> |
-| Battery<br><sub>From:EndlessHostRoles</sub> | Dad<br><sub>From:EndlessHostRoles</sub> | Paranoid<br><sub>From:SuperNewRoles</sub> | Beacon<br><sub>From:EndlessHostRoles</sub> |
-| Bane<br><sub>From:EndlessHostRoles</sub> | Veteran<br><sub>From:TownOfUs</sub> | Ventguard<br><sub>From:EndlessHostRoles</sub> | PortalMaker<br><sub>From:TheOtherRoles</sub> |
-| Bodyguard<br><sub>From:TownOfHost E</sub> | PonkotuTeller<br><sub>From:TownOfHost-K</sub> | Markseeker<br><sub>From:EndlessHostRoles</sub> | Marshall<br><sub>From:TownOfHostPlus</sub> |
-| Judge<br><sub>From:SuperNewRoles</sub> | Medium<br><sub>From:TownOfHost E</sub> | Mayor<br><sub>From:TownOfUs</sub> | Medic<br><sub>From:ExtraRoles</sub> |
-| Mole<br><sub>From:TownOfHost-K</sub> | Lighter<br><sub>From:TheOtherRoles</sub> | Rhapsode<br><sub>From:EndlessHostRoles</sub> | Randomizer<br><sub>From:EndlessHostRoles</sub> |
-| Leery<br><sub>From:EndlessHostRoles</sub> | Ricochet<br><sub>From:EndlessHostRoles</sub> | Decryptor<br><sub>From:EndlessHostRoles</sub> | Carrier<br><sub>From:EndlessHostRoles</sub> |
-| Sentry<br><sub>From:EndlessHostRoles</sub> | Scientist | ScientistEndKnot | MeetingManager<br><sub>From:EndlessHostRoles</sub> |
-| Demolitionist<br><sub>From:Project Lotus</sub> | Jailor<br><sub>From:TownOfUs</sub> | Perceiver<br><sub>From:EndlessHostRoles</sub> | King<br><sub>From:TownOfHost-K</sub> |
-| SecurityGuard<br><sub>From:EndlessHostRoles</sub> | Coroner<br><sub>From:EndlessHostRoles</sub> | Lookout<br><sub>From:TownOfHost E</sub> | Benefactor<br><sub>From:EndlessHostRoles</sub> |
-| Negotiator<br><sub>From:EndlessHostRoles</sub> | Luckey<br><sub>From:TownOfHost E</sub> | Merchant<br><sub>From:TownOfHost E</sub> | Aid<br><sub>From:EndlessHostRoles</sub> |
-| Vigilante<br><sub>From:TownOfHost E</sub> | Car<br><sub>From:EndlessHostRoles</sub> | Inquirer<br><sub>From:EndlessHostRoles</sub> | Socialite<br><sub>From:EndlessHostRoles</sub> |
-| Sentinel<br><sub>From:EndlessHostRoles</sub> | GuardianAngel | GuardianAngelEndKnot | Bestower<br><sub>From:EndlessHostRoles</sub> |
-| Helper<br><sub>From:EndlessHostRoles</sub> | Convener<br><sub>From:EndlessHostRoles</sub> | Witness<br><sub>From:TownOfHost E</sub> | Oracle<br><sub>From:TownOfHost E</sub> |
-| Inquisitor<br><sub>From:EndlessHostRoles</sub> | Mathematician<br><sub>From:EndlessHostRoles</sub> | Mechanic<br><sub>From:TownOfHost</sub> | Astral<br><sub>From:SuperNewRoles</sub> |
-| Clairvoyant<br><sub>From:EndlessHostRoles</sub> | FortuneTeller<br><sub>From:TownOfHost_Y</sub> | Teller<br><sub>From:TownOfHost E</sub> | Mortician<br><sub>From:TownOfHost E</sub> |
-| LazyGuy<br><sub>From:TownOfHost E</sub> | President<br><sub>From:EndlessHostRoles</sub> | Addict<br><sub>From:TownOfHost E</sub> | Investigator<br><sub>From:TownOfHost Re-Edited</sub> |
-| Gardener<br><sub>From:EndlessHostRoles</sub> | Monarch<br><sub>From:TownOfHost E</sub> | Autocrat<br><sub>From:EndlessHostRoles</sub> | Farmer<br><sub>From:EndlessHostRoles</sub> |
-| Deputy<br><sub>From:TheOtherRoles</sub> | Analyst<br><sub>From:EndlessHostRoles</sub> | Unshifter<br><sub>From:EndlessHostRoles</sub> | Retributionist<br><sub>From:TownOfHost E</sub> |
-| Forensic<br><sub>From:EndlessHostRoles</sub> | Adventurer<br><sub>From:EndlessHostRoles</sub> | Imitator<br><sub>From:TownOfUs</sub> | Tree<br><sub>From:EndlessHostRoles</sub> |
-| Soothsayer<br><sub>From:EndlessHostRoles</sub> | Psychic<br><sub>From:TownOfHost E</sub> | LovingCrewmate<br><sub>From:Love Couple Mod</sub> | Alchemist<br><sub>From:Project Lotus</sub> |
-| WolfBoy<br><sub>From:TownOfHost-K</sub> | ForceFielder | Akazukin<br><sub>From:SuperNewRoles</sub> | Sandbox |
-| Operative<br><sub>From:EndlessHostRoles</sub> | Survivor<br><sub>From:EndlessHostRoles</sub> | Bouncer<br><sub>From:EndlessHostRoles</sub> | Gemini<br><sub>From:Project Lotus</sub> |
-| MapExtender<br><sub>From:TheOtherRoles</sub> | PortalButton | Revenant<br><sub>From:EndlessHostRoles</sub> | Crewmate |
-| Newscaster | Mirage<br><sub>From:NebulaontheShip</sub> | Evader<br><sub>From:EndlessHostRoles</sub> | SheriffHadouHo<br><sub>From:TownOfHost-Pko</sub> |
+| Sensor<br><sub>From:EndlessHostRoles</sub> | Tar<br><sub>From:EndlessHostRoles</sub> | TimeMaster<br><sub>From:TooManyRoles</sub> | TimeManager<br><sub>From:TownOfHost</sub> |
+| DoubleAgent<br><sub>From:EndlessHostRoles</sub> | DummySpawner<br><sub>From:SuperNewRoles</sub> | Dictator<br><sub>From:TownOfHost</sub> | Detour<br><sub>From:EndlessHostRoles</sub> |
+| Detective | DetectiveEndKnot | Tether<br><sub>From:EndlessHostRoles</sub> | Telekinetic<br><sub>From:TownOfHost_Y</sub> |
+| Telecommunication<br><sub>From:EndlessHostRoles</sub> | Doorjammer<br><sub>From:EndlessHostRoles</sub> | ToiletMaster<br><sub>From:EndlessHostRoles</sub> | DonutDelivery<br><sub>From:EndlessHostRoles</sub> |
+| Doctor<br><sub>From:NebulaontheShip</sub> | Tracker | TrackerEndKnot | Transporter<br><sub>From:TownOfUs</sub> |
+| Transmitter<br><sub>From:EndlessHostRoles</sub> | Druid<br><sub>From:EndlessHostRoles</sub> | Tornado<br><sub>From:EndlessHostRoles</sub> | Drainer<br><sub>From:EndlessHostRoles</sub> |
+| Tracefinder<br><sub>From:TownOfHost E</sub> | Tunneler<br><sub>From:EndlessHostRoles</sub> | NiceEraser<br><sub>From:EndlessHostRoles</sub> | NiceGuesser<br><sub>From:TheOtherRoles</sub> |
+| Nightmare<br><sub>From:EndlessHostRoles</sub> | Noisemaker | NoisemakerEndKnot | Vacuum<br><sub>From:EndlessHostRoles</sub> |
+| Pacifist<br><sub>From:EndlessHostRoles</sub> | Hacker<br><sub>From:TheOtherRoles</sub> | Battery<br><sub>From:EndlessHostRoles</sub> | Dad<br><sub>From:EndlessHostRoles</sub> |
+| Paranoid<br><sub>From:SuperNewRoles</sub> | Beacon<br><sub>From:EndlessHostRoles</sub> | Bane<br><sub>From:EndlessHostRoles</sub> | Veteran<br><sub>From:TownOfUs</sub> |
+| Ventguard<br><sub>From:EndlessHostRoles</sub> | PortalMaker<br><sub>From:TheOtherRoles</sub> | Bodyguard<br><sub>From:TownOfHost E</sub> | PonkotuTeller<br><sub>From:TownOfHost-K</sub> |
+| Markseeker<br><sub>From:EndlessHostRoles</sub> | Marshall<br><sub>From:TownOfHostPlus</sub> | Judge<br><sub>From:SuperNewRoles</sub> | Medium<br><sub>From:TownOfHost E</sub> |
+| Mayor<br><sub>From:TownOfUs</sub> | Medic<br><sub>From:ExtraRoles</sub> | Mole<br><sub>From:TownOfHost-K</sub> | Lighter<br><sub>From:TheOtherRoles</sub> |
+| Rhapsode<br><sub>From:EndlessHostRoles</sub> | Randomizer<br><sub>From:EndlessHostRoles</sub> | Leery<br><sub>From:EndlessHostRoles</sub> | Ricochet<br><sub>From:EndlessHostRoles</sub> |
+| Decryptor<br><sub>From:EndlessHostRoles</sub> | Carrier<br><sub>From:EndlessHostRoles</sub> | Sentry<br><sub>From:EndlessHostRoles</sub> | Scientist |
+| ScientistEndKnot | MeetingManager<br><sub>From:EndlessHostRoles</sub> | Demolitionist<br><sub>From:Project Lotus</sub> | Jailor<br><sub>From:TownOfUs</sub> |
+| King<br><sub>From:TownOfHost-K</sub> | SecurityGuard<br><sub>From:EndlessHostRoles</sub> | Coroner<br><sub>From:EndlessHostRoles</sub> | Lookout<br><sub>From:TownOfHost E</sub> |
+| Benefactor<br><sub>From:EndlessHostRoles</sub> | Negotiator<br><sub>From:EndlessHostRoles</sub> | Luckey<br><sub>From:TownOfHost E</sub> | Merchant<br><sub>From:TownOfHost E</sub> |
+| Aid<br><sub>From:EndlessHostRoles</sub> | Vigilante<br><sub>From:TownOfHost E</sub> | Car<br><sub>From:EndlessHostRoles</sub> | Inquirer<br><sub>From:EndlessHostRoles</sub> |
+| Socialite<br><sub>From:EndlessHostRoles</sub> | Sentinel<br><sub>From:EndlessHostRoles</sub> | GuardianAngel | GuardianAngelEndKnot |
+| Bestower<br><sub>From:EndlessHostRoles</sub> | Helper<br><sub>From:EndlessHostRoles</sub> | Convener<br><sub>From:EndlessHostRoles</sub> | Witness<br><sub>From:TownOfHost E</sub> |
+| Oracle<br><sub>From:TownOfHost E</sub> | Inquisitor<br><sub>From:EndlessHostRoles</sub> | Mathematician<br><sub>From:EndlessHostRoles</sub> | Mechanic<br><sub>From:TownOfHost</sub> |
+| Astral<br><sub>From:SuperNewRoles</sub> | Clairvoyant<br><sub>From:EndlessHostRoles</sub> | FortuneTeller<br><sub>From:TownOfHost_Y</sub> | Teller<br><sub>From:TownOfHost E</sub> |
+| Mortician<br><sub>From:TownOfHost E</sub> | LazyGuy<br><sub>From:TownOfHost E</sub> | President<br><sub>From:EndlessHostRoles</sub> | Addict<br><sub>From:TownOfHost E</sub> |
+| Investigator<br><sub>From:TownOfHost Re-Edited</sub> | Gardener<br><sub>From:EndlessHostRoles</sub> | Monarch<br><sub>From:TownOfHost E</sub> | Autocrat<br><sub>From:EndlessHostRoles</sub> |
+| Farmer<br><sub>From:EndlessHostRoles</sub> | Deputy<br><sub>From:TheOtherRoles</sub> | Analyst<br><sub>From:EndlessHostRoles</sub> | Unshifter<br><sub>From:EndlessHostRoles</sub> |
+| Retributionist<br><sub>From:TownOfHost E</sub> | Forensic<br><sub>From:EndlessHostRoles</sub> | Adventurer<br><sub>From:EndlessHostRoles</sub> | Imitator<br><sub>From:TownOfUs</sub> |
+| Tree<br><sub>From:EndlessHostRoles</sub> | Soothsayer<br><sub>From:EndlessHostRoles</sub> | Psychic<br><sub>From:TownOfHost E</sub> | LovingCrewmate<br><sub>From:Love Couple Mod</sub> |
+| Alchemist<br><sub>From:Project Lotus</sub> | WolfBoy<br><sub>From:TownOfHost-K</sub> | ForceFielder | Akazukin<br><sub>From:SuperNewRoles</sub> |
+| Sandbox | Operative<br><sub>From:EndlessHostRoles</sub> | Survivor<br><sub>From:EndlessHostRoles</sub> | Bouncer<br><sub>From:EndlessHostRoles</sub> |
+| Gemini<br><sub>From:Project Lotus</sub> | MapExtender<br><sub>From:TheOtherRoles</sub> | PortalButton | Revenant<br><sub>From:EndlessHostRoles</sub> |
+| Crewmate | Newscaster | Mirage<br><sub>From:NebulaontheShip</sub> | Evader<br><sub>From:EndlessHostRoles</sub> |
+| SheriffHadouHo<br><sub>From:TownOfHost-Pko</sub> |  |  |  |
 
 ### Neutral (141)
 
@@ -195,48 +194,44 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 |---|---|---|---|
 | GM<br><sub>From:TOR GM Edition</sub> | Convict<br><sub>From:TownOfHost E</sub> | Emptiness<br><sub>From:TownOfHost-K</sub> |  |
 
-### Sub-roles / Add-ons (150)
+### Sub-roles / Add-ons (135)
 
 |   |   |   |   |
 |---|---|---|---|
 | TaskMaster<br><sub>From:TownOfUs</sub> | Venom<br><sub>From:EndlessHostRoles</sub> | Absorber<br><sub>From:EndlessHostRoles</sub> | Avenger<br><sub>From:TownOfHost_Y</sub> |
 | Amnesia<br><sub>From:TownOfHost-K</sub> | Allergic<br><sub>From:EndlessHostRoles</sub> | Anchor<br><sub>From:EndlessHostRoles</sub> | AntiTP<br><sub>From:TheOtherRoles</sub> |
 | Antidote<br><sub>From:TownOfHost E</sub> | Undead<br><sub>From:Project Lotus</sub> | Unbound<br><sub>From:EndlessHostRoles</sub> | Unlucky<br><sub>From:TownOfHost E</sub> |
-| Mischievous<br><sub>From:EndlessHostRoles</sub> | Insane<br><sub>From:EndlessHostRoles</sub> | Warden<br><sub>From:TownOfHost E</sub> | Watcher<br><sub>From:TOR GM Edition</sub> |
-| Entranced<br><sub>From:EndlessHostRoles</sub> | Aide<br><sub>From:EndlessHostRoles</sub> | Flash<br><sub>From:TownOfUs</sub> | Egoist<br><sub>From:TownOfHost</sub> |
-| Autopsy<br><sub>From:TownOfHost_Y</sub> | Talkative<br><sub>From:EndlessHostRoles</sub> | Onbound<br><sub>From:TownOfHost E</sub> | GA<br><sub>From:EndlessHostRoles</sub> |
-| Fool<br><sub>From:TownOfHost_Y</sub> | Glow<br><sub>From:TownOfHost E</sub> | Guesser<br><sub>From:TheOtherRoles</sub> | Commited |
-| Concealer<br><sub>From:TownOfHost E</sub> | Constricted<br><sub>From:EndlessHostRoles</sub> | Composter<br><sub>From:EndlessHostRoles</sub> | Diseased<br><sub>From:TownOfUs</sub> |
-| Sunglasses<br><sub>From:TheOtherRoles</sub> | Seer<br><sub>From:TheOtherRoles</sub> | Shade<br><sub>From:EndlessHostRoles</sub> | Asthmatic<br><sub>From:EndlessHostRoles</sub> |
-| Shy<br><sub>From:EndlessHostRoles</sub> | Stressed<br><sub>From:EndlessHostRoles</sub> | Spurt<br><sub>From:EndlessHostRoles</sub> | Giant<br><sub>From:TownOfUs</sub> |
-| Sleep<br><sub>From:EndlessHostRoles</sub> | Sleuth<br><sub>From:TownOfUs</sub> | Sonar<br><sub>From:TownOfUs</sub> | Tired<br><sub>From:EndlessHostRoles</sub> |
-| Dynamo<br><sub>From:EndlessHostRoles</sub> | Tiebreaker<br><sub>From:TownOfUs</sub> | Taskcounter<br><sub>From:EndlessHostRoles</sub> | DoubleShot<br><sub>From:TownOfUs</sub> |
-| Damocles<br><sub>From:EndlessHostRoles</sub> | Disco<br><sub>From:EndlessHostRoles</sub> | Deadlined<br><sub>From:TownofHost-Optimized</sub> | DeadlyQuota<br><sub>From:EndlessHostRoles</sub> |
-| Torch<br><sub>From:TownOfUs</sub> | Clumsy<br><sub>From:EndlessHostRoles</sub> | Disregarded<br><sub>From:TownOfHost-K</sub> | Necroview<br><sub>From:TownOfHostPlus</sub> |
-| Noisy<br><sub>From:EndlessHostRoles</sub> | Oblivious<br><sub>From:TownOfHost_Y</sub> | BananaMan<br><sub>From:EndlessHostRoles</sub> | Busy<br><sub>From:EndlessHostRoles</sub> |
-| Finder<br><sub>From:EndlessHostRoles</sub> | Facilitator<br><sub>From:EndlessHostRoles</sub> | Bewilder<br><sub>From:TownOfHost E</sub> | Blind<br><sub>From:EndlessHostRoles</sub> |
-| Fragile<br><sub>From:TownOfHost E</sub> | Bloodmoon<br><sub>From:TownOfHost E</sub> | Blocked<br><sub>From:EndlessHostRoles</sub> | Beartrap<br><sub>From:TownOfHost E</sub> |
-| Bait<br><sub>From:TheOtherRoles</sub> | Introvert<br><sub>From:EndlessHostRoles</sub> | Magnet<br><sub>From:EndlessHostRoles</sub> | Madmate<br><sub>From:au libhalt net</sub> |
-| Minion<br><sub>From:TownOfHost E</sub> | Mimic<br><sub>From:TownOfHost E</sub> | Mare<br><sub>From:TownOfHost</sub> | Messenger<br><sub>From:EndlessHostRoles</sub> |
-| Youtuber<br><sub>From:TownOfHost E</sub> | Rascal<br><sub>From:TownOfHost E</sub> | LastImpostor<br><sub>From:TownOfHost</sub> | Lucky<br><sub>From:TownOfHost E</sub> |
-| Lovers<br><sub>From:Love Couple Mod</sub> | Reach<br><sub>From:TownOfHost E</sub> | Listener<br><sub>From:EndlessHostRoles</sub> | Rookie<br><sub>From:EndlessHostRoles</sub> |
-| Looter<br><sub>From:EndlessHostRoles</sub> | Lazy<br><sub>From:TownOfHost E</sub> | Loyal<br><sub>From:TownOfHost E</sub> | Workhorse<br><sub>From:TownOfHost</sub> |
-| EvilSpirit<br><sub>From:TownOfHost E</sub> | Stained<br><sub>From:EndlessHostRoles</sub> | Blessed<br><sub>From:EndlessHostRoles</sub> | Compelled<br><sub>From:EndlessHostRoles</sub> |
-| Nimble<br><sub>From:Project Lotus</sub> | Knighted<br><sub>From:TownOfHost E</sub> | Urgent<br><sub>From:EndlessHostRoles</sub> | Trainee<br><sub>From:EndlessHostRoles</sub> |
+| Mischievous<br><sub>From:EndlessHostRoles</sub> | Insane<br><sub>From:EndlessHostRoles</sub> | Watcher<br><sub>From:TOR GM Edition</sub> | Entranced<br><sub>From:EndlessHostRoles</sub> |
+| Aide<br><sub>From:EndlessHostRoles</sub> | Flash<br><sub>From:TownOfUs</sub> | Egoist<br><sub>From:TownOfHost</sub> | Autopsy<br><sub>From:TownOfHost_Y</sub> |
+| Talkative<br><sub>From:EndlessHostRoles</sub> | Onbound<br><sub>From:TownOfHost E</sub> | GA<br><sub>From:EndlessHostRoles</sub> | Fool<br><sub>From:TownOfHost_Y</sub> |
+| Glow<br><sub>From:TownOfHost E</sub> | Guesser<br><sub>From:TheOtherRoles</sub> | Commited | Concealer<br><sub>From:TownOfHost E</sub> |
+| Composter<br><sub>From:EndlessHostRoles</sub> | Diseased<br><sub>From:TownOfUs</sub> | Sunglasses<br><sub>From:TheOtherRoles</sub> | Seer<br><sub>From:TheOtherRoles</sub> |
+| Shade<br><sub>From:EndlessHostRoles</sub> | Asthmatic<br><sub>From:EndlessHostRoles</sub> | Shy<br><sub>From:EndlessHostRoles</sub> | Stressed<br><sub>From:EndlessHostRoles</sub> |
+| Spurt<br><sub>From:EndlessHostRoles</sub> | Giant<br><sub>From:TownOfUs</sub> | Sleep<br><sub>From:EndlessHostRoles</sub> | Sonar<br><sub>From:TownOfUs</sub> |
+| Tired<br><sub>From:EndlessHostRoles</sub> | Dynamo<br><sub>From:EndlessHostRoles</sub> | Tiebreaker<br><sub>From:TownOfUs</sub> | Taskcounter<br><sub>From:EndlessHostRoles</sub> |
+| DoubleShot<br><sub>From:TownOfUs</sub> | Damocles<br><sub>From:EndlessHostRoles</sub> | Disco<br><sub>From:EndlessHostRoles</sub> | Deadlined<br><sub>From:TownofHost-Optimized</sub> |
+| DeadlyQuota<br><sub>From:EndlessHostRoles</sub> | Torch<br><sub>From:TownOfUs</sub> | Clumsy<br><sub>From:EndlessHostRoles</sub> | Disregarded<br><sub>From:TownOfHost-K</sub> |
+| Necroview<br><sub>From:TownOfHostPlus</sub> | Noisy<br><sub>From:EndlessHostRoles</sub> | BananaMan<br><sub>From:EndlessHostRoles</sub> | Busy<br><sub>From:EndlessHostRoles</sub> |
+| Finder<br><sub>From:EndlessHostRoles</sub> | Facilitator<br><sub>From:EndlessHostRoles</sub> | Bewilder<br><sub>From:TownOfHost E</sub> | Fragile<br><sub>From:TownOfHost E</sub> |
+| Bloodmoon<br><sub>From:TownOfHost E</sub> | Blocked<br><sub>From:EndlessHostRoles</sub> | Beartrap<br><sub>From:TownOfHost E</sub> | Bait<br><sub>From:TheOtherRoles</sub> |
+| Introvert<br><sub>From:EndlessHostRoles</sub> | Magnet<br><sub>From:EndlessHostRoles</sub> | Madmate<br><sub>From:au libhalt net</sub> | Minion<br><sub>From:TownOfHost E</sub> |
+| Mimic<br><sub>From:TownOfHost E</sub> | Mare<br><sub>From:TownOfHost</sub> | Messenger<br><sub>From:EndlessHostRoles</sub> | Youtuber<br><sub>From:TownOfHost E</sub> |
+| Rascal<br><sub>From:TownOfHost E</sub> | LastImpostor<br><sub>From:TownOfHost</sub> | Lucky<br><sub>From:TownOfHost E</sub> | Lovers<br><sub>From:Love Couple Mod</sub> |
+| Listener<br><sub>From:EndlessHostRoles</sub> | Rookie<br><sub>From:EndlessHostRoles</sub> | Looter<br><sub>From:EndlessHostRoles</sub> | Lazy<br><sub>From:TownOfHost E</sub> |
+| Loyal<br><sub>From:TownOfHost E</sub> | Workhorse<br><sub>From:TownOfHost</sub> | EvilSpirit<br><sub>From:TownOfHost E</sub> | Blessed<br><sub>From:EndlessHostRoles</sub> |
+| Compelled<br><sub>From:EndlessHostRoles</sub> | Nimble<br><sub>From:Project Lotus</sub> | Knighted<br><sub>From:TownOfHost E</sub> | Trainee<br><sub>From:EndlessHostRoles</sub> |
 | Energetic<br><sub>From:EndlessHostRoles</sub> | Bloodlust<br><sub>From:TownOfHost E</sub> | Swift<br><sub>From:EndlessHostRoles</sub> | Underdog<br><sub>From:TownOfUs</sub> |
 | Haunter<br><sub>From:TownOfUs</sub> | Haste<br><sub>From:EndlessHostRoles</sub> | Cleansed<br><sub>From:TownOfHost E</sub> | Examiner<br><sub>From:EndlessHostRoles</sub> |
 | Circumvent<br><sub>From:EndlessHostRoles</sub> | Stealer<br><sub>From:EndlessHostRoles</sub> | Contagious<br><sub>From:TownOfHost E</sub> | DoubleCount |
 | Hidden<br><sub>From:EndlessHostRoles</sub> | Truant<br><sub>From:EndlessHostRoles</sub> | Physicist<br><sub>From:EndlessHostRoles</sub> | Gravestone<br><sub>From:TownOfHost E</sub> |
-| Charmed<br><sub>From:TownOfHost E</sub> | Phantasm<br><sub>From:TownOfUs</sub> | Amanojaku<br><sub>From:TownOfHost-K</sub> | AsistingAngel<br><sub>From:TownOfHost-K</sub> |
-| Connecting<br><sub>From:TownOfHost-K</sub> | DemonicCrusher<br><sub>From:TownOfHost-K</sub> | DemonicSupporter<br><sub>From:TownOfHost-K</sub> | DemonicTracker<br><sub>From:TownOfHost-K</sub> |
-| DemonicVenter<br><sub>From:TownOfHost-K</sub> | Dizzy<br><sub>From:EndlessHostRoles</sub> | Elector<br><sub>From:TownOfHost-K</sub> | Entombed<br><sub>From:EndlessHostRoles</sub> |
-| Faction<br><sub>From:TownOfHost-K</sub> | GhostNoiseSender<br><sub>From:TownOfHost-K</sub> | Ghostbuttoner<br><sub>From:TownOfHost-K</sub> | GhostReseter<br><sub>From:TownOfHost-K</sub> |
-| GhostRumour<br><sub>From:TownOfHost-K</sub> | InfoPoor<br><sub>From:TownOfHost_Y</sub> | LastNeutral<br><sub>From:TownOfHost-K</sub> | MagicHand<br><sub>From:TownOfHost-K</sub> |
-| MeetingAngel<br><sub>From:EndlessHostRoles</sub> | Moon<br><sub>From:TownOfHost-K</sub> | News<br><sub>From:TownOfHost-K</sub> | NonReport<br><sub>From:TownOfHost_Y</sub> |
+| Charmed<br><sub>From:TownOfHost E</sub> | Phantasm<br><sub>From:TownOfUs</sub> | AsistingAngel<br><sub>From:TownOfHost-K</sub> | DemonicCrusher<br><sub>From:TownOfHost-K</sub> |
+| DemonicSupporter<br><sub>From:TownOfHost-K</sub> | DemonicTracker<br><sub>From:TownOfHost-K</sub> | DemonicVenter<br><sub>From:TownOfHost-K</sub> | Dizzy<br><sub>From:EndlessHostRoles</sub> |
+| Elector<br><sub>From:TownOfHost-K</sub> | Entombed<br><sub>From:EndlessHostRoles</sub> | Faction<br><sub>From:TownOfHost-K</sub> | GhostNoiseSender<br><sub>From:TownOfHost-K</sub> |
+| Ghostbuttoner<br><sub>From:TownOfHost-K</sub> | GhostRumour<br><sub>From:TownOfHost-K</sub> | InfoPoor<br><sub>From:TownOfHost_Y</sub> | LastNeutral<br><sub>From:TownOfHost-K</sub> |
+| MagicHand<br><sub>From:TownOfHost-K</sub> | MeetingAngel<br><sub>From:EndlessHostRoles</sub> | Moon<br><sub>From:TownOfHost-K</sub> | NonReport<br><sub>From:TownOfHost_Y</sub> |
 | Notvoter<br><sub>From:TownOfHost-K</sub> | OneWolf<br><sub>From:TownOfHost-K</sub> | Opener<br><sub>From:TownOfHost-K</sub> | Reroll<br><sub>From:EndlessHostRoles</sub> |
-| Serial<br><sub>From:TownOfHost-K</sub> | SlowStarter<br><sub>From:TownOfHost-K</sub> | Stack<br><sub>From:TownOfHost-K</sub> | Transparent<br><sub>From:TownOfHost-K</sub> |
-| Twins<br><sub>From:TownOfHost-K</sub> | Water<br><sub>From:TownOfHost-K</sub> | Focused<br><sub>From:EndlessHostRoles</sub> | Shibboleth<br><sub>From:TownOfHost for E</sub> |
-| Forewarner | Influencer |  |  |
+| Stack<br><sub>From:TownOfHost-K</sub> | Twins<br><sub>From:TownOfHost-K</sub> | Water<br><sub>From:TownOfHost-K</sub> | Focused<br><sub>From:EndlessHostRoles</sub> |
+| Shibboleth<br><sub>From:TownOfHost for E</sub> | Forewarner | Influencer |  |
 
 ---
 

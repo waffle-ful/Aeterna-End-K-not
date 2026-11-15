@@ -1233,10 +1233,8 @@ internal static class StartGameHostPatch
                 Reroll.Init();
                 Lovers.Init();
                 Twins.Init();
-                Connecting.Init();
                 Faction.Init();
                 LastNeutral.Init();
-                SlowStarter.Init();
                 LateTask.New(Tired.Reset, 7f, log: false);
                 LateTask.New(OneWolf.ApplyDesync, 1.5f, log: false);
             }

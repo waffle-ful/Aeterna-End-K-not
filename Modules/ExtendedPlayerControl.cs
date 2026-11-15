@@ -2175,7 +2175,8 @@ internal static class ExtendedPlayerControl
 
         public float GetKillDistance()
         {
-            return player.Is(CustomRoles.Reach) ? 2.5f : GameManager.Instance.LogicOptions.GetKillDistance();
+            // 魔の手の距離設定 (0=短い・1=普通・2=長い) は本編のキル距離の段階と同じ
+            return player.Is(CustomRoles.MagicHand) ? MagicHand.KillDistance.GetInt() switch { 0 => 1f, 1 => 1.8f, _ => 2.5f } : GameManager.Instance.LogicOptions.GetKillDistance();
         }
 
         public bool IsShifted()
@@ -2262,8 +2263,6 @@ internal static class ExtendedPlayerControl
             }
 
             if (player.Is(CustomRoles.Bloodlust)) Main.AllPlayerKillCooldown[player.PlayerId] = Bloodlust.KCD.GetFloat();
-
-            if (player.Is(CustomRoles.Serial)) Main.AllPlayerKillCooldown[player.PlayerId] = Serial.KillCooldown.GetFloat();
 
             if (Main.KilledDiseased.TryGetValue(player.PlayerId, out int value))
             {
@@ -2523,7 +2522,7 @@ internal static class ExtendedPlayerControl
                     {
                         foreach (PlayerState ps in Main.PlayerStates.Values)
                         {
-                            if (!ps.IsDead && ps.Role.SeesArrowsToDeadBodies && !ps.SubRoles.Contains(CustomRoles.Blind) && ps.Player)
+                            if (!ps.IsDead && ps.Role.SeesArrowsToDeadBodies && ps.Player)
                             {
                                 LocateArrow.Add(ps.Player.PlayerId, pos);
                                 NotifyRoles(SpecifySeer: ps.Player, SpecifyTarget: ps.Player);

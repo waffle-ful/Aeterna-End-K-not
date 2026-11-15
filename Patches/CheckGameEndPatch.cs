@@ -334,19 +334,6 @@ internal static class GameEndChecker
                             AdditionalWinnerTeams.Add((AdditionalWinners)role);
                             break;
                     }
-
-                    if (pc.Is(CustomRoles.Amanojaku) && Amanojaku.ShouldWin(pc, reason))
-                    {
-                        WinnerIds.Add(pc.PlayerId);
-                        AdditionalWinnerTeams.Add(AdditionalWinners.Amanojaku);
-                    }
-                    else if (pc.Is(CustomRoles.Amanojaku) && MeetingStates.MeetingNum >= Amanojaku.ActivationDay.GetInt() &&
-                        (reason is GameOverReason.CrewmatesByTask or GameOverReason.CrewmatesByVote || (Amanojaku.MustSurvive.GetBool() && !pc.IsAlive())))
-                    {
-                        // 天邪鬼は自陣営 (クルー) の勝利では敗北するので、Crewmate 分岐で先に足された分を取り消す。
-                        // 生存必須設定がオンで本人が死んでいる場合も、自陣営の勝利に相乗りできない。
-                        WinnerIds.Remove(pc.PlayerId);
-                    }
                 }
 
                 foreach (PlayerControl pc in Main.CachedAllPlayerControls()) // Second loop for roles depending on other winners

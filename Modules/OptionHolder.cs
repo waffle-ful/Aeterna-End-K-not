@@ -456,7 +456,6 @@ public static class Options
     public static OptionItem AlliesKnowCrewpostor;
     public static OptionItem CrewpostorKillAfterTask;
     public static OptionItem CrewpostorLungeKill;
-    public static OptionItem ObliviousBaitImmune;
     public static OptionItem UnluckyTaskSuicideChance;
     public static OptionItem UnluckyKillSuicideChance;
     public static OptionItem UnluckyVentSuicideChance;
@@ -1345,7 +1344,8 @@ public static class Options
         roleCounts = [];
         roleSpawnChances = [];
 
-        foreach (CustomRoles role in Main.CustomRoleValues)
+        // 廃止した役職も含めて全 enum 値を持つ (引かれても例外にしない)
+        foreach (CustomRoles role in Enum.GetValues<CustomRoles>())
         {
             roleCounts.Add(role, 0);
             roleSpawnChances.Add(role, 0);

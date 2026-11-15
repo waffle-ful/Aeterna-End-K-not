@@ -266,7 +266,6 @@ public static class HudSpritePatch
                     break;
                 }
                 case CustomRoles.Clairvoyant:
-                case CustomRoles.Perceiver:
                 {
                     if (Options.UsePets.GetBool()) newPetButton = CustomButton.Get("EvilNearby");
                     else newAbilityButton = CustomButton.Get("EvilNearby");

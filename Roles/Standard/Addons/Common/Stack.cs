@@ -6,21 +6,17 @@ namespace EndKnot.Roles;
 
 internal class Stack : IAddon
 {
-    private static readonly (string Name, CustomRoles Role)[] EligibleAddons =
+    // オプション ID は保存値の鍵なので固定で持つ (欠番は廃止した属性の分)
+    private static readonly (int Id, string Name, CustomRoles Role)[] EligibleAddons =
     [
-        ("Water", CustomRoles.Water),
-        ("Notvoter", CustomRoles.Notvoter),
-        ("Elector", CustomRoles.Elector),
-        ("Transparent", CustomRoles.Transparent),
-        ("Moon", CustomRoles.Moon),
-        ("MagicHand", CustomRoles.MagicHand),
-        ("Serial", CustomRoles.Serial),
-        ("Opener", CustomRoles.Opener),
-        ("NonReport", CustomRoles.NonReport),
-        ("InfoPoor", CustomRoles.InfoPoor),
-        ("News", CustomRoles.News),
-        ("SlowStarter", CustomRoles.SlowStarter),
-        ("Connecting", CustomRoles.Connecting)
+        (20510, "Water", CustomRoles.Water),
+        (20511, "Notvoter", CustomRoles.Notvoter),
+        (20512, "Elector", CustomRoles.Elector),
+        (20514, "Moon", CustomRoles.Moon),
+        (20515, "MagicHand", CustomRoles.MagicHand),
+        (20517, "Opener", CustomRoles.Opener),
+        (20518, "NonReport", CustomRoles.NonReport),
+        (20519, "InfoPoor", CustomRoles.InfoPoor)
     ];
 
     private static readonly Dictionary<CustomRoles, OptionItem> AssignOptions = [];
@@ -32,10 +28,9 @@ internal class Stack : IAddon
         SetupAdtRoleOptions(20500, CustomRoles.Stack, canSetNum: true, teamSpawnOptions: true);
 
         AssignOptions.Clear();
-        int id = 20510;
-        foreach ((string name, CustomRoles role) in EligibleAddons)
+        foreach ((int id, string name, CustomRoles role) in EligibleAddons)
         {
-            OptionItem opt = new BooleanOptionItem(id++, $"StackAssign.{name}", false, TabGroup.Addons)
+            OptionItem opt = new BooleanOptionItem(id, $"StackAssign.{name}", false, TabGroup.Addons)
                 .SetParent(CustomRoleSpawnChances[CustomRoles.Stack]);
             AssignOptions[role] = opt;
         }

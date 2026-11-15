@@ -1008,7 +1008,6 @@ internal static class MeetingHudStartPatch
             }
 
             if (Forensic.ForensicNotify.TryGetValue(pc.PlayerId, out string value1)) AddMsg(value1, pc.PlayerId, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Forensic), GetString("ForensicNoticeTitle")));
-            if (Main.SleuthMsgs.TryGetValue(pc.PlayerId, out string msg)) AddMsg(msg, pc.PlayerId, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Sleuth), GetString("Sleuth")));
 
             if (pc.Is(CustomRoles.Mimic) && !pc.IsAlive())
             {
@@ -1052,13 +1051,6 @@ internal static class MeetingHudStartPatch
                 AddMsg(newscasterBroadcast, 255, Utils.ColorString(Utils.GetRoleColor(CustomRoles.Newscaster), GetString("NewscasterBroadcastTitle")));
         }
 
-        if (CustomRoles.News.IsEnable())
-        {
-            string newsBroadcast = News.BuildBroadcast();
-            if (!string.IsNullOrEmpty(newsBroadcast))
-                AddMsg(newsBroadcast, 255, Utils.ColorString(Utils.GetRoleColor(CustomRoles.News), GetString("News.BroadcastTitle")));
-        }
-
         if (msgToSend.Count > 0)
         {
             LateTask.New(() =>
@@ -1097,7 +1089,6 @@ internal static class MeetingHudStartPatch
         // 前の会議で使われなかった予約が残ると、次の会議で無関係な票キャンセルが会議を閉じてしまう
         CheckForEndVotingPatch.EndMeetingAfterVoteCleanup = false;
         CheckForEndVotingPatch.EndMeetingVoterId = byte.MaxValue;
-        SlowStarter.OnMeetingStart();
     }
 
     public static void Postfix(MeetingHud __instance)

@@ -894,15 +894,11 @@ internal static class SetHudActivePatch
             case CustomRoles.Racer:
                 __instance.AbilityButton?.ToggleVisible(true);
                 break;
-            case CustomRoles.Parasite:
             case CustomRoles.Renegade:
             case CustomRoles.Magician:
                 __instance.SabotageButton?.ToggleVisible(true);
                 break;
         }
-
-        if (Main.PlayerStates.TryGetValue(player.PlayerId, out PlayerState ps) && ps.SubRoles.Contains(CustomRoles.Oblivious))
-            __instance.ReportButton?.ToggleVisible(false);
 
         __instance.KillButton?.ToggleVisible(player.CanUseKillButton());
         __instance.ImpostorVentButton?.ToggleVisible(player.CanUseImpostorVentButton());
@@ -1050,7 +1046,7 @@ internal static class MapBehaviourShowPatch
         }
         else if (opts.Mode is MapOptions.Modes.Normal or MapOptions.Modes.Sabotage)
         {
-            if (player.Is(CustomRoleTypes.Impostor) || player.CanUseSabotage() || player.Is(CustomRoles.Glitch) || player.Is(CustomRoles.WeaponMaster) || player.Is(CustomRoles.Magician) || player.Is(CustomRoles.Parasite) || player.Is(CustomRoles.Renegade) || (player.Is(CustomRoles.Jackal) && Jackal.CanSabotage.GetBool()) || (player.Is(CustomRoles.Traitor) && Traitor.CanSabotage.GetBool()) || DemonicSupporter.IsAssigned(player.PlayerId))
+            if (player.Is(CustomRoleTypes.Impostor) || player.CanUseSabotage() || player.Is(CustomRoles.Glitch) || player.Is(CustomRoles.WeaponMaster) || player.Is(CustomRoles.Magician) || player.Is(CustomRoles.Renegade) || (player.Is(CustomRoles.Jackal) && Jackal.CanSabotage.GetBool()) || (player.Is(CustomRoles.Traitor) && Traitor.CanSabotage.GetBool()) || DemonicSupporter.IsAssigned(player.PlayerId))
                 opts.Mode = MapOptions.Modes.Sabotage;
             else
                 opts.Mode = MapOptions.Modes.Normal;

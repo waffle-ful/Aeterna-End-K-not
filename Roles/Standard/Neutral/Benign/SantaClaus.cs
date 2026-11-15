@@ -28,7 +28,6 @@ public class SantaClaus : RoleBase
         CustomRoles.Asthmatic,
         CustomRoles.Disco,
         CustomRoles.Mischievous,
-        CustomRoles.Oblivious,
         CustomRoles.Sleep,
         CustomRoles.Sunglasses,
         CustomRoles.Tiebreaker,
