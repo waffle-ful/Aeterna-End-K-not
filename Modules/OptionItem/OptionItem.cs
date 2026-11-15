@@ -271,6 +271,8 @@ public abstract class OptionItem
 
     private void Refresh()
     {
+        if (SettingsUI.SettingsUiMode.Active) SettingsUI.SettingsPages.MarkDirty();
+
         if (OptionBehaviour is StringOption opt)
         {
             // 素の GetName() を直書きすると役職行の装飾タイトル (白文字+色帯+size wrap) が剥がれる。

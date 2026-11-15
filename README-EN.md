@@ -350,8 +350,8 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[Mini.RegionInstall](https://github.com/miniduikboot/Mini.RegionInstall)** (miniduikboot, GPL-3.0): custom region installer
 - **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods, LGPL-2.1): UI sprites (two next-page buttons, two checkmarks), the role info tab panel
 - **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009): Custom Net Objects (CNO), chat control and clearing, player-control helper code, vent operation patches, vote-kick handling, online permission checks
-- **[More Roles Plus](https://github.com/haru03741-glitch/More-Roles-Plus)** (haru03741-glitch, GPL-3.0): copying the ability button into the bottom-right grid (freeplay spawn editor)
-- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** / [source code (Nebula-Public)](https://github.com/Dolly1016/Nebula-Public) (Dolly1016 et al., GPL-3.0; NebulaAPI is LGPL-3.0): disabling incremental GC and running GC ahead of time; a mod with many roles of its own and its own API
+- **[More Roles Plus](https://github.com/haru03741-glitch/More-Roles-Plus)** (haru03741-glitch, GPL-3.0): copying the ability button into the bottom-right grid (freeplay spawn editor), the new settings menu (via TownOfHost_L)
+- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** / [source code (Nebula-Public)](https://github.com/Dolly1016/Nebula-Public) (Dolly1016 et al., GPL-3.0; NebulaAPI is LGPL-3.0): disabling incremental GC and running GC ahead of time; settings-menu widgets (window, scroll view, buttons), the role card list and per-role settings pages (via More Roles Plus and TownOfHost_L); a mod with many roles of its own and its own API
 - **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor) (LGPL-3.0): modded handshake, compiler-generated object and state machine wrappers, disabling the 5s timeout on custom servers
 - **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai): a TOH-lineage mod adding its own roles and host-side features
 - **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff): an Among Us role mod with a large set of original roles
@@ -385,6 +385,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[TownOfHost-Shell](https://github.com/sijimi2222/TownOfHost-Shell)** (TORAKUNNOIE, GPL-3.0): source of the Nova role
 - **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions repo](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion): split RPC packs, meeting screen handling
 - **[TownOfHost-hamo](https://github.com/rar006/TownOfHost-hamo)** (rar006, GPL-3.0): coming-out feature (`/co`, `/aco`, `/colist`)
+- **[TownOfHost_L](https://github.com/haru03741-glitch/TownOfHost_L)** (haru03741-glitch, GPL-3.0): the new settings menu, switchable in client options (from More Roles Plus)
 - **TownOfHost-Kemo**: the idea behind the roles Light, Shadow, Kemono and Furry
 - **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper): a Town Of Host derivative adding its own roles
 - **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975): zoom

@@ -251,6 +251,8 @@ public static class GameOptionsMenuPatch
     [HarmonyPrefix]
     private static bool InitializePrefix(GameOptionsMenu __instance)
     {
+        if (SettingsUI.SettingsUiMode.Active) return true;
+
         ModGameOptionsMenu.PruneDeadEntries();
 
         if (ModGameOptionsMenu.TabIndex < 3) return true;
@@ -271,6 +273,8 @@ public static class GameOptionsMenuPatch
     [HarmonyPostfix]
     private static void InitializePostfix()
     {
+        if (SettingsUI.SettingsUiMode.Active) return;
+
         GameObject optionMenu = GameObject.Find("PlayerOptionsMenu(Clone)");
         if (!optionMenu) return;
 
@@ -329,6 +333,8 @@ public static class GameOptionsMenuPatch
     [HarmonyPrefix]
     private static bool CreateSettingsPrefix(GameOptionsMenu __instance)
     {
+        if (SettingsUI.SettingsUiMode.Active) return true;
+
         if (ModGameOptionsMenu.TabIndex < 3) return true;
 
         var modTab = (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
@@ -657,6 +663,8 @@ public static class GameOptionsMenuPatch
     [HarmonyPrefix]
     public static void UpdatePostfix(GameOptionsMenu __instance)
     {
+        if (SettingsUI.SettingsUiMode.Active) return;
+
         // Disable scroll options when chat open
         if (!HudManager.InstanceExists || !__instance.gameObject.activeSelf) return;
 
@@ -672,6 +680,8 @@ public static class GameOptionsMenuPatch
     [HarmonyPrefix]
     private static bool ValueChangedPrefix(GameOptionsMenu __instance, OptionBehaviour option)
     {
+        if (SettingsUI.SettingsUiMode.Active) return true;
+
         if (ModGameOptionsMenu.TabIndex < 3) return true;
 
         if (ModGameOptionsMenu.OptionList.TryGetValue(option, out int index))
@@ -695,6 +705,8 @@ public static class GameOptionsMenuPatch
 
     public static void ReCreateAllSettings()
     {
+        if (SettingsUI.SettingsUiMode.Active) return;
+
         ReCreateGeneration++;
         int generation = ReCreateGeneration;
 
@@ -732,6 +744,8 @@ public static class GameOptionsMenuPatch
 
     public static void ReCreateSettings(GameOptionsMenu __instance, TabGroup? modTabOverride = null)
     {
+        if (SettingsUI.SettingsUiMode.Active) return;
+
         if (!modTabOverride.HasValue && ModGameOptionsMenu.TabIndex < 3) return;
         if (!__instance) return;
 
@@ -867,6 +881,7 @@ public static class GameOptionsMenuPatch
 
     public static void ReloadUI()
     {
+        if (SettingsUI.SettingsUiMode.Active) return;
         if (!GameSettingMenu.Instance) return;
 
         foreach (var (tab, menu) in GameSettingMenuPatch.GetModSettingsTabs())
@@ -890,6 +905,7 @@ public static class GameOptionsMenuPatch
 
     public static void RefreshSettingValues()
     {
+        if (SettingsUI.SettingsUiMode.Active) return;
         if (ModGameOptionsMenu.TabIndex < 3) return;
         var activeModTab = (TabGroup)(ModGameOptionsMenu.TabIndex - 3);
         if (!GameSettingMenuPatch.GetModSettingsTabs().TryGetValue(activeModTab, out GameOptionsMenu activeTab) || !activeTab) return;
@@ -1769,6 +1785,8 @@ public static class GameSettingMenuPatch
         }
         catch (Exception e) { Utils.ThrowException(e); }
 
+        if (SettingsUI.SettingsUiMode.Active) return;
+
         RoleMenuTabBar.Reset();
         // Create buttons/tabs for every TabGroup and gate visibility with IsRelevant instead of
         // filtering the list — an in-menu game-mode switch can then reveal tabs that were
@@ -2491,6 +2509,8 @@ public static class GameSettingMenuPatch
     [HarmonyPrefix]
     public static bool ChangeTabPrefix(GameSettingMenu __instance, ref int tabNum, [HarmonyArgument(1)] bool previewOnly)
     {
+        if (SettingsUI.SettingsUiMode.Active) return true;
+
         if (!previewOnly || tabNum != 1) ModGameOptionsMenu.TabIndex = tabNum;
 
         GameOptionsMenu settingsTab;
@@ -2587,6 +2607,8 @@ public static class GameSettingMenuPatch
     [HarmonyPrefix]
     private static bool OnEnablePrefix(GameSettingMenu __instance)
     {
+        SettingsUI.SettingsUiMode.Latch();
+
         // In the Backrooms lobby, hide the full-screen creepy overlay while the menu is open — its
         // order-100 tint would otherwise paint the world-space menu yellow. No-op outside Backrooms.
         BackroomsLobby.SetOverlaySuppressed(true);
@@ -2597,6 +2619,8 @@ public static class GameSettingMenuPatch
         // closed on open so the menu is always the only active surface.
         if (HudManager.InstanceExists && HudManager.Instance.Chat && HudManager.Instance.Chat.IsOpenOrOpening)
             HudManager.Instance.Chat.ForceClosed();
+
+        if (SettingsUI.SettingsUiMode.Active) return false;
 
         if (!TemplateGameOptionsMenu)
         {
@@ -2626,6 +2650,8 @@ public static class GameSettingMenuPatch
     public static void Close_Prefix()
     {
         BackroomsLobby.SetOverlaySuppressed(false); // restore the Backrooms overlay when the menu closes
+
+        if (SettingsUI.SettingsUiMode.Active) return;
 
         if (TempParent == null)
         {

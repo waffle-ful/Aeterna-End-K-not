@@ -306,6 +306,24 @@ public static class OnlinePresetsManager
         if (menu) CreatePresetExplorerUI(menu);
     }
 
+    // 新しい設定画面から使う窓口 (画面の部品は持たない)
+    public static void ExportToFile() => ExportCurrentPreset(null);
+
+    public static bool ApplyFromFile(string path)
+    {
+        if (!GameStates.IsLobby || !AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return false;
+        Dictionary<int, int> loaded = ReadLocalPreset(path);
+
+        if (loaded == null)
+        {
+            Logger.SendInGame(Translator.GetString("PresetImportFailed"), Color.red);
+            return false;
+        }
+
+        ApplyPreset(loaded);
+        return true;
+    }
+
     private static void ApplyPreset(Dictionary<int, int> preset)
     {
         foreach ((int id, OptionItem optionItem) in OptionItem.FastOptions)

@@ -44,6 +44,9 @@ internal static class ControllerManagerUpdatePatch
             // バグ報告の欄に打っている文字をホットキーとして拾わない
             if (BugReport.IsOpen) return;
 
+            // 新しい設定画面の検索欄・数の打ち込み欄に打っている文字もホットキーとして拾わない
+            if (SettingsUI.SettingsUiMode.Active && (SettingsUI.SettingsSearchBox.IsTyping || SettingsUI.TextField.Typing) && !KeysDown(KeyCode.Tab)) return;
+
             if (Il2Direct.Exists<HudManager>())
             {
                 if (Il2Direct.Alive(PlayerControl.LocalPlayer) && Il2Direct.Alive(PlayerControl.LocalPlayer.Collider))
@@ -64,12 +67,15 @@ internal static class ControllerManagerUpdatePatch
                             OptionShower.CurrentPage = i;
                     }*/
 
-                    if (KeysDown(KeyCode.Return) && GameSettingMenu.Instance && GameSettingMenu.Instance.isActiveAndEnabled && !NumericOptionInputPatch.IsInputOpen && !YouTubePostTextEditPatch.IsInputOpen)
+                    if (KeysDown(KeyCode.Return) && !SettingsUI.SettingsUiMode.Active && GameSettingMenu.Instance && GameSettingMenu.Instance.isActiveAndEnabled && !NumericOptionInputPatch.IsInputOpen && !YouTubePostTextEditPatch.IsInputOpen)
                         GameSettingMenuPatch.SearchForOptionsAction?.Invoke();
 
                     // Tab accepts the top search suggestion into the settings search box (Enter then searches).
                     if (KeysDown(KeyCode.Tab) && GameSettingMenu.Instance && GameSettingMenu.Instance.isActiveAndEnabled)
+                    {
                         OptionSearchSuggestPatch.AcceptTop();
+                        if (SettingsUI.SettingsUiMode.Active) SettingsUI.SettingsSearchBox.AcceptTop();
+                    }
                 }
             }
 

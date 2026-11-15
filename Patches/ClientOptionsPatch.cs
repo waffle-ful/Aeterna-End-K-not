@@ -28,6 +28,7 @@ public static class OptionsMenuBehaviourStartPatch
     private static ClientOptionItem HorseMode;
     private static ClientOptionItem LongMode;
     private static ClientOptionItem ClassicMode;
+    private static ClientOptionItem NewSettingsUI;
     private static ClientOptionItem LobbyMusic;
     private static ClientOptionItem EnableCommandHelper;
     private static ClientOptionItem ShowModdedClientText;
@@ -207,6 +208,9 @@ public static class OptionsMenuBehaviourStartPatch
 
             static void ShowPlayerInfoInLobbyButtonToggle() => Utils.DirtyName.UnionWith(Main.EnumeratePlayerControls().Select(x => x.PlayerId));
         }
+
+        if (NewSettingsUI == null || !NewSettingsUI.ToggleButton)
+            NewSettingsUI = ClientOptionItem.Create("NewSettingsUI", Main.NewSettingsUI, __instance);
 
         if (HorseMode == null || !HorseMode.ToggleButton)
         {
