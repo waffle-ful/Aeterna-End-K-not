@@ -524,6 +524,11 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
                                 opt.SetFloat(FloatOptionNames.ImpostorLightMod, Main.DefaultImpostorVision);
                                 break;
                             }
+                            case CustomRoles.Eclipsed:
+                            {
+                                Eclipsed.ApplyGameOptions(opt, player.PlayerId);
+                                break;
+                            }
                             case CustomRoles.MagicHand:
                             {
                                 opt.SetInt(Int32OptionNames.KillDistance, MagicHand.KillDistance.GetInt());
@@ -840,10 +845,10 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
                     Options.AdditionalEmergencyCooldownTime.GetInt());
             }
 
-            if (CustomRoles.ClockBlocker.RoleExist(ClockBlocker.CountAddedTimeAfterDeath.GetBool()))
+            if (ClockStopper.IsActive)
             {
                 int originalTime = opt.GetInt(Int32OptionNames.EmergencyCooldown);
-                opt.SetInt(Int32OptionNames.EmergencyCooldown, ClockBlocker.GetTotalTime(originalTime));
+                opt.SetInt(Int32OptionNames.EmergencyCooldown, ClockStopper.GetTotalTime(originalTime));
             }
 
             if (MeetingStates.FirstMeeting)

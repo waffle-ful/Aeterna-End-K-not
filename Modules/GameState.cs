@@ -559,6 +559,10 @@ public class TaskState
 
                 Simon.RemoveTarget(player, Simon.Instruction.Task);
                 Wyrd.CheckPlayerAction(player, Wyrd.Action.Task);
+
+                // 完了数はこの後で増えるので、少し待ってから印を送る
+                if (CompletedTasksCount + 1 >= AllTasksCount)
+                    LateTask.New(() => ProgressSeer.OnTaskFinished(player), 0.2f, log: false);
             }
         }
         catch (Exception e) { Utils.ThrowException(e); }

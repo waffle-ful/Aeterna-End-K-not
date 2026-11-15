@@ -396,6 +396,7 @@ internal static class CheckMurderPatch
                 killer.SetKillCooldown();
                 Main.PlayerStates[killer.PlayerId].Role.OnMurder(killer, target);
                 Mimic.OnMurder(killer, target);
+                Eclipsed.OnMurder(killer, target);
                 RPC.PlaySoundRPC(killer.PlayerId, Sounds.KillSound);
                 return false;
             }
@@ -875,6 +876,9 @@ internal static class MurderPlayerPatch
         catch (Exception e) { ThrowException(e); }
 
         try { Mimic.OnMurder(killer, target); }
+        catch (Exception e) { ThrowException(e); }
+
+        try { Eclipsed.OnMurder(killer, target); }
         catch (Exception e) { ThrowException(e); }
 
         try

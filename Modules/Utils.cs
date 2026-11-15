@@ -1041,7 +1041,6 @@ public static class Utils
             case CustomRoles.Jackal:
             case CustomRoles.Sidekick:
             case CustomRoles.Poisoner:
-            case CustomRoles.Eclipse:
             case CustomRoles.Pyromaniac:
             case CustomRoles.SerialKiller:
             case CustomRoles.Blockade:
@@ -3946,6 +3945,8 @@ public static class Utils
                             if (Faction.AreAllies(seer, target))
                                 TargetMark.Append(ColorString(GetRoleColor(CustomRoles.Faction), " δ"));
 
+                            TargetMark.Append(ProgressSeer.GetMark(seer, target));
+
                             if (Randomizer.IsShielded(target)) TargetMark.Append(ColorString(GetRoleColor(CustomRoles.Randomizer), "✚"));
 
                             switch (seerRole)
@@ -4000,13 +4001,12 @@ public static class Utils
                                         case ConnectSaver connectSaver:
                                             TargetMark.Append(connectSaver.GetInsiderMark(target, forMeeting));
                                             break;
-                                        case ProgressKiller progressKiller:
-                                            TargetMark.Append(progressKiller.GetInsiderMark(target));
-                                            break;
                                         case EarnestWolf earnestWolf:
                                             TargetMark.Append(earnestWolf.GetInsiderMark(target, forMeeting));
                                             break;
                                     }
+
+                                    TargetMark.Append(ProgressSeer.GetInsiderMark(impostor, target));
                                 }
                             }
 

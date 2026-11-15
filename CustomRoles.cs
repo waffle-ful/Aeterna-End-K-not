@@ -811,5 +811,10 @@ public enum CustomRoles
     Influencer, // Ghost role
 
     // Upstream EHR catchup (add-ons)
-    Transfer
+    Transfer,
+
+    // 役職から属性へ移したもの
+    ClockStopper,
+    Eclipsed,
+    ProgressSeer
 }

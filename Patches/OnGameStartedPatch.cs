@@ -1233,6 +1233,7 @@ internal static class StartGameHostPatch
                 Reroll.Init();
                 Lovers.Init();
                 Twins.Init();
+                Eclipsed.Init();
                 Faction.Init();
                 LastNeutral.Init();
                 LateTask.New(Tired.Reset, 7f, log: false);
