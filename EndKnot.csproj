@@ -209,7 +209,8 @@
     <!-- ゲーム起動中は plugins の DLL がロックされコピーに失敗するが、それでビルドを落とさない
          (失敗してもコピーされないだけ — コンパイル成果物 build/ は常に有効)。
          コピーが飛ばされたときは警告が残るので、実機反映漏れはビルドログで判別できる。 -->
-    <Target Name="Copy" AfterTargets="Build" Condition="'$(AmongUs)' != '' And '$(Configuration)' != 'Android'">
+    <!-- EndKnotSkipPluginsCopy=true で止まる (BepInEx を別の名前のフォルダに置いた環境で、配置先をそちらへ差し替える時に使う)。 -->
+    <Target Name="Copy" AfterTargets="Build" Condition="'$(AmongUs)' != '' And '$(Configuration)' != 'Android' And '$(EndKnotSkipPluginsCopy)' != 'true'">
         <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll" DestinationFolder="$(AmongUs)/BepInEx/plugins/" ContinueOnError="WarnAndContinue"/>
         <!-- PDB も一緒に配置する。DLL だけ更新すると配置済み PDB が古いまま残り、GUID/age 不一致で
              例外スタックトレースの file:line が解決できなくなる (握りつぶし例外の発生源が特定不能になる)。 -->

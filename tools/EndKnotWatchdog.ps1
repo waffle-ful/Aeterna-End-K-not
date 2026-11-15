@@ -450,7 +450,16 @@ function Get-PluginsDir {
     if ($script:CapturedExe) { try { $root = Split-Path $script:CapturedExe -Parent } catch { } }
     if (-not $root -and $AuExePathOverride) { try { $root = Split-Path $AuExePathOverride -Parent } catch { } }
     if (-not $root) { $root = $AuInstallDirFallback }
-    return (Join-Path $root 'BepInEx\plugins')
+    # mod ごとに BepInEx の木を分けている時は doorstop が読む木 (BepInEx-EK 等) の plugins へ入れる
+    $tree = 'BepInEx'
+    try {
+        $ini = Join-Path $root 'doorstop_config.ini'
+        if (Test-Path $ini) {
+            $m = [regex]::Match([IO.File]::ReadAllText($ini), '(?m)^target_assembly\s*=\s*([^\\/\r\n]+)[\\/]core[\\/]')
+            if ($m.Success -and (Test-Path (Join-Path $root "$($m.Groups[1].Value)\plugins"))) { $tree = $m.Groups[1].Value }
+        }
+    } catch { }
+    return (Join-Path $root "$tree\plugins")
 }
 
 function Write-HotswapResult {
