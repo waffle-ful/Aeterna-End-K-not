@@ -236,15 +236,22 @@ internal static class SettingsPages
         if (icons == null || icons.Count == 0) return null;
         int cur = GameOpts != null ? GameOpts.MapId : -1;
         // マップは名前の札を付けず、行の幅いっぱいに並べる (選んだマップの名前は右の見出しに出す)
-        var line = new Stack(true) { Gap = 0.1f };
+        // 本編のマップが増えても行からはみ出さないよう、枚数で絵の大きさを決める
+        const float gap = 0.1f;
+        int n = 0;
+        foreach (var icon in icons)
+            if (icon != null && icon.MapIcon) n++;
+        if (n == 0) return null;
+        float btn = Math.Max(0.25f, Math.Min(MapBtn, (rowW - gap * (n - 1)) / n));
+        var line = new Stack(true) { Gap = gap };
         foreach (var icon in icons)
         {
             if (icon == null || !icon.MapIcon) continue;
             int id = (int)icon.Name;
             bool on = id == cur;
-            line.Add(new Button(new Picture(icon.MapIcon, MapBtn - 0.1f, MapBtn - 0.1f) { Fit = true }, () => SelectMap(id))
+            line.Add(new Button(new Picture(icon.MapIcon, btn - 0.1f, btn - 0.1f) { Fit = true }, () => SelectMap(id))
             {
-                Size = new Vector2(MapBtn, MapBtn),
+                Size = new Vector2(btn, btn),
                 Padding = Vector2.zero,
                 Color = on ? Accent : OptEditor.Dim,
                 Fill = on ? Color.Lerp(Color.black, Accent, 0.35f) : null,
@@ -267,6 +274,7 @@ internal static class SettingsPages
             5 => StringNames.MapNameFungle,
             _ => null,
         };
+        if (o.MapId == 3) return Translator.GetString("Dleks");
         return n.HasValue ? TranslationController.Instance.GetString(n.Value) : "";
     }
 
