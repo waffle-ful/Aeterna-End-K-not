@@ -37,6 +37,10 @@ public static class RegionInstaller
 
     public static void Install()
     {
+        // ServerManager has usually loaded its file before the LoadServers patch below is live, so also check
+        // when the first MainMenu scene loads (independent of the region config).
+        SceneManager.add_sceneLoaded((Action<Scene, LoadSceneMode>)OnFirstSceneLoadedLeaveOtherModRegion);
+
         string path = Path.Combine(BepInEx.Paths.ConfigPath, ConfigFileName);
         if (!File.Exists(path)) return;
 
@@ -170,11 +174,58 @@ public static class RegionInstaller
         }
     }
 
+    // regionInfo.json is shared by every Among Us install and mod on the PC. A client mod selects its own
+    // server ("MRP Server ...") on every launch and that choice stays in the file, so End K not would start on
+    // a server whose anti-cheat kicks a host-only mod. Once per launch, if that region is selected, switch to
+    // the official Asia region (or the first official one). Later changes are the user's choice and are kept.
+    private static bool _otherModRegionChecked;
+
+    private static void OnFirstSceneLoadedLeaveOtherModRegion(Scene scene, LoadSceneMode mode)
+    {
+        if (_otherModRegionChecked || scene.name != "MainMenu") return;
+        try
+        {
+            if (ServerManager.InstanceExists) LeaveOtherModRegionOnce(ServerManager.Instance);
+        }
+        catch (Exception e) { Logger.Error($"region install: leaving the other mod's region failed: {e}", "RegionInstaller"); }
+    }
+
+    private static void LeaveOtherModRegionOnce(ServerManager instance)
+    {
+        if (_otherModRegionChecked) return;
+        _otherModRegionChecked = true;
+
+        IRegionInfo current = instance.CurrentRegion;
+        if (current == null || current.Name == null || !current.Name.StartsWith("MRP Server", StringComparison.Ordinal)) return;
+        if (IsOfficial(current)) return;
+
+        IRegionInfo fallback = null;
+        foreach (IRegionInfo region in instance.AvailableRegions)
+        {
+            if (region == null || !IsOfficial(region)) continue;
+            fallback ??= region;
+            if (region.Name != null && region.Name.Contains("Asia", StringComparison.OrdinalIgnoreCase)) { fallback = region; break; }
+        }
+
+        if (fallback == null) return;
+        instance.SetRegion(fallback);
+        Logger.Info($"region install: '{current.Name}' was selected by another mod; switched to '{fallback.Name}'", "RegionInstaller");
+    }
+
+    private static bool IsOfficial(IRegionInfo region)
+    {
+        string ping = region.PingServer;
+        return ping != null && ping.EndsWith("among.us", StringComparison.Ordinal);
+    }
+
     [HarmonyPatch(typeof(ServerManager), nameof(ServerManager.LoadServers))]
     private static class LoadServersPatch
     {
         private static void Postfix(ServerManager __instance)
         {
+            try { LeaveOtherModRegionOnce(__instance); }
+            catch (Exception e) { Logger.Error($"region install: leaving the other mod's region failed: {e}", "RegionInstaller"); }
+
             try
             {
                 // Nothing installed (no config, or the old plugin owns the regions): leave ServerManager alone.
