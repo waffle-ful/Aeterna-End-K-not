@@ -1227,6 +1227,14 @@ internal static class ShapeshiftPatch
             catch (Exception e) { Utils.ThrowException(e); }
         }
 
+        // 色覚補助の色名 (「レッド」等) はホストが CNO 生成時に消すだけなので、モッド客の画面では残って CNO の横に出る。
+        // 客も見た目を受け取ったこの時点で同じく消す
+        if (__instance.PlayerId >= 200 && !AmongUsClient.Instance.AmHost)
+        {
+            TMPro.TextMeshPro cbText = __instance.cosmetics ? __instance.cosmetics.colorBlindText : null;
+            if (cbText) cbText.color = Color.clear;
+        }
+
         // Set CNO name visible for modded clients after shapeshift
         // ⚠️ Hide() でホストから隠した CNO は対象外にする。スプライト適用の Shapeshift はこの Postfix を
         // 必ず通るため、無条件に出すと onlyVisibleTo 指定の CNO (Druid の探知機 / Whisperer の魂) が
@@ -1243,7 +1251,14 @@ internal static class ShapeshiftPatch
             try
             {
                 string shownName = target.Data.Outfits[PlayerOutfitType.Default].PlayerName;
-                if (shownName != null && shownName.StartsWith(CustomNetObject.SpriteNamePrefix, StringComparison.Ordinal)) return;
+                if (shownName != null && shownName.StartsWith(CustomNetObject.SpriteNamePrefix, StringComparison.Ordinal))
+                {
+                    // 文字スプライトの CNO は体を見せない。ホストは生成時に体の色を消すが、客は Visible=false で隠すだけなので、
+                    // 本人の死後に本編が Visible=true へ書き戻すと既定の体が文字の下に出る。ホストと同じく色も消しておく
+                    SpriteRenderer spriteBody = __instance.cosmetics.currentBodySprite.BodySprite;
+                    if (spriteBody) spriteBody.color = Color.clear;
+                    return;
+                }
 
                 if (!__instance.Visible) __instance.Visible = true;
                 SpriteRenderer body = __instance.cosmetics.currentBodySprite.BodySprite;
