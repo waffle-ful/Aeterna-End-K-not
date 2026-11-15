@@ -56,6 +56,9 @@ public class AudienceInfoBubble : MonoBehaviour
         if (AudienceOptions.ShowInfoOverlay == null || !AudienceOptions.ShowInfoOverlay.GetBool()) return false;
         // ロビー(予告)とゲーム中(干渉が効く)の両方で表示。会議中も表示したままにする。
         if (!GameStates.IsLobby && !GameStates.InGame) return false;
+        // IMGUI は常に最前面に描かれるので、歯車の設定画面が開いている間は出さない
+        OptionsMenuBehaviour gameMenu = HudManager.Instance.GameMenu;
+        if (gameMenu && gameMenu.IsOpen) return false;
         return true;
     }
 

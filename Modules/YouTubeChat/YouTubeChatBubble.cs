@@ -84,6 +84,9 @@ public class YouTubeChatBubble : MonoBehaviour
         if (!Il2Direct.Alive(AmongUsClient.Instance) || !Il2Direct.AmHost(AmongUsClient.Instance)) return false;
         if (YouTubeChatOptions.Enabled == null || !YouTubeChatOptions.Enabled.GetBool()) return false;
         if (YouTubeChatOptions.HideDuringMeetings != null && YouTubeChatOptions.HideDuringMeetings.GetBool() && GameStates.IsMeeting) return false;
+        // IMGUI は常に最前面に描かれるので、歯車の設定画面が開いている間は出さない
+        OptionsMenuBehaviour gameMenu = HudManager.Instance.GameMenu;
+        if (gameMenu && gameMenu.IsOpen) return false;
         return true;
     }
 
