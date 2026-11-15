@@ -227,15 +227,12 @@ internal static class EAC
 
                     byte colorId = sr.ReadByte();
 
-                    if (colorId > 17)
-                    {
-                        WarnHost();
-                        Report(pc, "Invalid color");
-                        HandleCheat(pc, "Invalid color");
-                        Logger.Fatal($"Player [{pc.OwnerId}:{pc.GetRealName()}] sent invalid color {colorId}, rejected", "EAC");
-                        sr.Recycle();
-                        return true;
-                    }
+                    // 範囲外の色番号はチート扱いしない。保存された色は別のクライアント mod の独自色のこともあり
+                    // (player.amogus は Epic/Steam と mod の間で共用)、本編のホスト側 CheckColor が空いている正規の色へ
+                    // 回してから RpcSetColor する (ホスト自身の色 28 が 11 で出たのを実機で確認)。
+                    // ここで拒否すると客の色が -1 のまま残り、試合開始で「Timeout while waiting for other player data」になる
+                    if (colorId >= Palette.PlayerColors.Length)
+                        Logger.Info($"Player [{pc.OwnerId}:{pc.GetRealName()}] sent out-of-range color {colorId}; vanilla CheckColor picks a valid one", "EAC");
 
                     break;
                 }
