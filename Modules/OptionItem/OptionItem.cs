@@ -386,7 +386,6 @@ public enum TabGroup
     Combinations,
     Addons,
     OtherRoles,
-    LegacyRoles,
     PresetExplorer
 }
 

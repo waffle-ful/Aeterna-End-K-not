@@ -106,7 +106,7 @@ internal static class RoleCatalog
         TextOptionItem section = null;
         string sectionTitle = null;
 
-        void Add(OptionItem o, bool legacy)
+        void Add(OptionItem o)
         {
             if (roleOf.TryGetValue(o, out var role))
             {
@@ -120,7 +120,7 @@ internal static class RoleCatalog
             if (o is TextOptionItem toi)
             {
                 section = toi;
-                sectionTitle = legacy ? Translator.GetString("MenuCat.Legacy") : toi.GetName(disableColor: true).RemoveHtmlTags().Trim('★', ' ');
+                sectionTitle = toi.GetName(disableColor: true).RemoveHtmlTags().Trim('★', ' ');
                 group = null;
                 return;
             }
@@ -145,24 +145,7 @@ internal static class RoleCatalog
         foreach (var o in OptionItem.AllOptions)
         {
             if (o.Tab != tab || o.Parent != null) continue;
-            Add(o, false);
-        }
-
-        // 古い役職: 見出し (元の区分の名前) ごとに、その区分の欄の末尾へ
-        TabGroup? origin = null;
-        group = null;
-        section = null;
-        sectionTitle = null;
-        foreach (var o in OptionItem.AllOptions)
-        {
-            if (o.Tab != TabGroup.LegacyRoles || o.Parent != null) continue;
-            if (o is TextOptionItem head)
-            {
-                origin = Enum.TryParse(head.Name.Replace("TabGroup.", ""), out TabGroup parsed) ? parsed : null;
-                if (origin == tab) Add(o, true);
-                continue;
-            }
-            if (origin == tab) Add(o, true);
+            Add(o);
         }
 
         list.RemoveAll(e => !e.IsRole && e.Opts.Count == 0);

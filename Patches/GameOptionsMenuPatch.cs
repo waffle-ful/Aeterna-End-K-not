@@ -168,7 +168,7 @@ public static class GameOptionsMenuPatch
 
         // Mirror of the CreateSettings dispatch: tabs the two-pane view renders own their row states.
         if (NewRoleMenuState.Active &&
-            (modTab is >= TabGroup.ImpostorRoles and <= TabGroup.LegacyRoles || NewRoleMenuView.IsConsolidatedSettingsTab(modTab)))
+            (modTab is >= TabGroup.ImpostorRoles and <= TabGroup.OtherRoles || NewRoleMenuView.IsConsolidatedSettingsTab(modTab)))
             return;
 
         Transform container = menu.settingsContainer;
@@ -349,7 +349,7 @@ public static class GameOptionsMenuPatch
         // New menu (kill-switch: NewRoleMenuState.Active). Role tabs -> two-pane master/detail.
         // The three setting TabGroups (System/Mod/Task) -> one consolidated, sectioned column.
         // PresetExplorer (handled above) is the only tab that still uses the original renderer.
-        if (NewRoleMenuState.Active && modTab is >= TabGroup.ImpostorRoles and <= TabGroup.LegacyRoles)
+        if (NewRoleMenuState.Active && modTab is >= TabGroup.ImpostorRoles and <= TabGroup.OtherRoles)
         {
             NewRoleMenuView.Build(__instance, modTab);
             return false;
@@ -753,7 +753,7 @@ public static class GameOptionsMenuPatch
 
         // Mirror of the CreateSettings dispatch: ValueChanged/collapse re-layouts route through
         // here too, so the new view must own reflow for its tabs or build/reflow desync.
-        if (NewRoleMenuState.Active && modTab is >= TabGroup.ImpostorRoles and <= TabGroup.LegacyRoles)
+        if (NewRoleMenuState.Active && modTab is >= TabGroup.ImpostorRoles and <= TabGroup.OtherRoles)
         {
             NewRoleMenuView.Reflow(__instance, modTab);
             return;
@@ -1801,8 +1801,8 @@ public static class GameSettingMenuPatch
         if (active)
         {
             var shown = tabGroups.Where(t => t is not (TabGroup.GameSettings or TabGroup.TaskSettings));
-            orderedTabs = shown.Where(t => t is >= TabGroup.ImpostorRoles and <= TabGroup.LegacyRoles)
-                .Concat(shown.Where(t => t is not (>= TabGroup.ImpostorRoles and <= TabGroup.LegacyRoles)))
+            orderedTabs = shown.Where(t => t is >= TabGroup.ImpostorRoles and <= TabGroup.OtherRoles)
+                .Concat(shown.Where(t => t is not (>= TabGroup.ImpostorRoles and <= TabGroup.OtherRoles)))
                 .ToList();
         }
 
