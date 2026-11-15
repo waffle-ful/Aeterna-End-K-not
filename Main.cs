@@ -635,7 +635,7 @@ public class Main : BasePlugin
         HorseMode = Config.Bind("Client Options", "HorseMode", false);
         LongMode = Config.Bind("Client Options", "LongMode", false);
         ClassicMode = Config.Bind("Client Options", "ClassicMode", false);
-        NewSettingsUI = Config.Bind("Client Options", "NewSettingsUI", false);
+        NewSettingsUI = Config.Bind("Client Options", "NewSettingsUI", true);
         ShowPlayerInfoInLobby = Config.Bind("Client Options", "ShowPlayerInfoInLobby", false);
         LobbyMusic = Config.Bind("Client Options", "LobbyMusic", true);
         EnableCommandHelper = Config.Bind("Client Options", "EnableCommandHelper", true);

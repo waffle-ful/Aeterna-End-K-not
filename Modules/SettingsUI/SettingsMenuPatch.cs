@@ -648,6 +648,8 @@ internal static class SettingsMenuPatch
     {
         SettingsUiMode.Latch();
         if (!SettingsUiMode.Active) return true;
+        // 本編の画面の後ろの星空の幕 (Background) は消し、板の周りからロビーが見えるようにする (今の見た目の画面と同じ)
+        __instance.transform.FindChild("Background")?.gameObject.SetActive(false);
         SettingsTheme.Show(__instance);
 
         if (!templateGameOptionsMenu)
