@@ -510,11 +510,15 @@ internal sealed class Slider : Widget
     public Color Color = Color.white;
     public Func<float, float> OnChange;
 
-    private const float TrackH = 0.09f, Knob = 0.26f, HitH = 0.32f;
-    private static readonly Color TrackColor = new(0.17f, 0.18f, 0.21f, 1f);
+    // 筋は細く・両端は丸く (つまみの丸と形を揃える)。つまみは筋の約 3.5 倍
+    private const float TrackH = 0.065f, Knob = 0.23f, HitH = 0.32f;
+    private static readonly Color TrackBase = new(0.2f, 0.22f, 0.3f, 1f), Shadow = new(0f, 0f, 0f, 0.45f);
 
     private SlideBar _bar;
-    private Transform _fill;
+    private SpriteRenderer _fill;
+
+    // 残りの筋 = 地の紺に寄せた陣営の色 (灰だと紺の地の上で濁る)
+    private Color TrackColor => Color.Lerp(TrackBase, Color, 0.22f);
     private float _shown = -1f;
 
     // つまみの動く幅 = 幅からつまみの直径を引いた分 (端に寄せてもつまみが幅の外へ出ない)
@@ -532,17 +536,22 @@ internal sealed class Slider : Widget
         var go = Node("Slider", parent, ctx.Layer);
         size = new Vector2(Width, HitH);
         var circle = UiAssets.Circle;
+        var round = MenuArt.Round(TrackH / 2f);
         var track = Node(UiScreen.BackName, go.transform, ctx.Layer).AddComponent<SpriteRenderer>();
-        track.sprite = UiAssets.Blank;
+        track.sprite = round;
+        track.drawMode = SpriteDrawMode.Sliced;
+        track.size = new Vector2(Span + TrackH, TrackH);
         track.color = TrackColor;
-        Stretch(track.transform, Span, TrackH);
-        var fill = Node(UiScreen.FillName, go.transform, ctx.Layer).AddComponent<SpriteRenderer>();
-        fill.sprite = UiAssets.Blank;
-        fill.color = Color;
-        _fill = fill.transform;
-        // つまみ = 陣営の色の輪・黒の縁・白の丸 (後の子ほど手前)
-        var dot = Disc(go.transform, "Knob", circle, Knob, Color, ctx.Layer);
-        Disc(Disc(dot.transform, "Rim", circle, 0.84f, Color.black, ctx.Layer).transform, "Face", circle, 0.8f, Color.white, ctx.Layer);
+        _fill = Node(UiScreen.FillName, go.transform, ctx.Layer).AddComponent<SpriteRenderer>();
+        _fill.sprite = round;
+        _fill.drawMode = SpriteDrawMode.Sliced;
+        _fill.color = Color;
+        // つまみ = 白い丸と下へ少しずらした影 (陣営の色の輪で囲むと塗りと溶けて形が崩れる)。
+        // SlideBar は Dot の色を塗り替えるので、Dot は透明の入れ物にして中に影と丸を置く
+        var dot = Disc(go.transform, "Knob", circle, Knob, Color.clear, ctx.Layer);
+        var shadow = Disc(dot.transform, "Shadow", circle, 1.06f, Shadow, ctx.Layer);
+        shadow.transform.localPosition = new Vector3(0f, -0.07f, -0.005f);
+        Disc(dot.transform, "Face", circle, 1f, Color.white, ctx.Layer);
         var col = go.AddComponent<BoxCollider2D>();
         col.size = size;
 
@@ -568,7 +577,7 @@ internal sealed class Slider : Widget
         go.SetActive(true);
         // OnEnable が Bar と Dot を本編の色 (白) に塗るので戻す
         track.color = TrackColor;
-        dot.color = Color;
+        dot.color = Color.clear;
         Show(Value);
         return go;
     }
@@ -585,15 +594,10 @@ internal sealed class Slider : Widget
         _bar.Value = v;
         if (v == _shown) return;
         _shown = v;
-        float w = Math.Max(Span * v, 0.001f);
-        Stretch(_fill, w, TrackH);
-        _fill.localPosition = new Vector3(-Span / 2f + w / 2f, 0f, 0f);
-    }
-
-    private static void Stretch(Transform t, float w, float h)
-    {
-        var b = UiAssets.Blank ? UiAssets.Blank.bounds.size : Vector3.one;
-        t.localScale = new Vector3(w / Math.Max(b.x, 0.0001f), h / Math.Max(b.y, 0.0001f), 1f);
+        // 塗りは筋の左の丸い端からつまみの中心まで (右の丸い端はつまみの下に隠れる)
+        float w = Span * v + TrackH;
+        _fill.size = new Vector2(w, TrackH);
+        _fill.transform.localPosition = new Vector3(-Span / 2f - TrackH / 2f + w / 2f, 0f, 0f);
     }
 
     // 親の大きさに対する直径 d の丸 (いちばん外は単位で)
