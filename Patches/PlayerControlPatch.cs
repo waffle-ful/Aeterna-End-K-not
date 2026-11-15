@@ -395,6 +395,7 @@ internal static class CheckMurderPatch
                 target.Suicide(PlayerState.DeathReason.Kill, killer);
                 killer.SetKillCooldown();
                 Main.PlayerStates[killer.PlayerId].Role.OnMurder(killer, target);
+                Mimic.OnMurder(killer, target);
                 RPC.PlaySoundRPC(killer.PlayerId, Sounds.KillSound);
                 return false;
             }
@@ -871,6 +872,9 @@ internal static class MurderPlayerPatch
         catch (Exception e) { ThrowException(e); }
 
         try { Main.PlayerStates[killer.PlayerId].Role.OnMurder(killer, target); }
+        catch (Exception e) { ThrowException(e); }
+
+        try { Mimic.OnMurder(killer, target); }
         catch (Exception e) { ThrowException(e); }
 
         try

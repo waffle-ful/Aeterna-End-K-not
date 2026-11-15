@@ -111,6 +111,7 @@ internal static class CustomRolesHelper
                 // Impostor
                 CustomRoles.Decrescendo or
                 CustomRoles.EvilMaker or
+                CustomRoles.Notifier or
                 CustomRoles.Parasite or
                 // Ghost
                 CustomRoles.GhostReseter or
@@ -947,7 +948,6 @@ internal static class CustomRolesHelper
                 CustomRoles.Warlock or
                 CustomRoles.Ninja or
                 CustomRoles.Insider or
-                CustomRoles.Notifier or
                 CustomRoles.EvilGambler or
                 CustomRoles.EvilTeller or
                 CustomRoles.EvilBomber or
@@ -1632,7 +1632,6 @@ internal static class CustomRolesHelper
                 CustomRoles.Hypnotist => RoleOptionType.Impostor_Support,
                 CustomRoles.Librarian => RoleOptionType.Impostor_Support,
                 CustomRoles.Insider => RoleOptionType.Impostor_Support,
-                CustomRoles.Notifier => RoleOptionType.Impostor_Support,
                 CustomRoles.EvilSatellite => RoleOptionType.Impostor_Support,
                 CustomRoles.ConnectSaver => RoleOptionType.Impostor_Support,
                 CustomRoles.Nullifier => RoleOptionType.Impostor_Support,

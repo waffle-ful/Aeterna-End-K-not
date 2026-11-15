@@ -87,7 +87,6 @@ public static class RoleOrigins
         [CustomRoles.Morphling] = "TOR",
         [CustomRoles.Insider] = "TOH",
         [CustomRoles.Ninja] = "TOR",
-        [CustomRoles.Notifier] = "TOHK",
         [CustomRoles.Nuker] = "TOHE",
         [CustomRoles.Nullifier] = "EHR",
         [CustomRoles.Occultist] = "TOHRE",

@@ -2,13 +2,13 @@
 
 [日本語](ROLES.md) ・ [← Back to README](README-EN.md)
 
-**681 roles in total** (546 faction roles + 135 sub-roles/add-ons), organized by faction.
+**680 roles in total** (545 faction roles + 135 sub-roles/add-ons), organized by faction.
 
 Most of the roles listed here come from the base mod [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) and earlier mods in the scene such as the TownOfHost lineage. Some carry over the original implementation; others were rewritten with reference to it. The "from …" under each role names the mod that first implemented it. Credits for each project are collected in the [README](README-EN.md#credits).
 
 | Faction | Count |
 |---------|-------|
-| Impostor | 169 (vanilla 4 + remake 4 + custom 161) |
+| Impostor | 168 (vanilla 4 + remake 4 + custom 160) |
 | Crewmate | 176 (vanilla 6 + remake 7 + custom 163) |
 | Neutral | 141 |
 | Coven | 21 |
@@ -19,7 +19,7 @@ Most of the roles listed here come from the base mod [Endless Host Roles](https:
 
 Use `/r <role name>` or `/myrole` in-game to check each role's effects and settings.
 
-### Impostor (169)
+### Impostor (168)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -46,26 +46,25 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Dazzler<br><sub>From:TownOfHost Re-Edited</sub> | Changeling<br><sub>From:StellarRoles</sub> | Twister<br><sub>From:TownOfHost Re-Edited</sub> | Disperser<br><sub>From:TownOfUs</sub> |
 | Deathpact<br><sub>From:TownOfHost Re-Edited</sub> | Duellist<br><sub>From:EndlessHostRoles</sub> | TeleportKiller<br><sub>From:TownOfHost-K</sub> | ToiletFan<br><sub>From:SuperNewRoles</sub> |
 | Trapster<br><sub>From:EndlessHostRoles</sub> | Trickster<br><sub>From:EndlessHostRoles</sub> | NiceLogger<br><sub>From:TownOfHost-K</sub> | Nuker<br><sub>From:TownOfHost E</sub> |
-| Ninja<br><sub>From:TheOtherRoles</sub> | Nemesis<br><sub>From:EndlessHostRoles</sub> | Notifier<br><sub>From:TownOfHost-K</sub> | BountyHunter<br><sub>From:TheOtherRoles</sub> |
-| Puppeteer<br><sub>From:TownOfHost</sub> | Ballooner<br><sub>From:TownOfHost-K</sub> | Hangman<br><sub>From:TownOfHost E</sub> | Visionary<br><sub>From:EndlessHostRoles</sub> |
-| Hitman<br><sub>From:EndlessHostRoles</sub> | Phantom | PhantomEndKnot | Freezer<br><sub>From:Project Lotus</sub> |
-| Framer<br><sub>From:EndlessHostRoles</sub> | ProgressKiller<br><sub>From:TownOfHost-K</sub> | ProBowler<br><sub>From:TownOfHost-K</sub> | Penguin<br><sub>From:SuperNewRoles</sub> |
-| VentOpener<br><sub>From:TownOfHost-K</sub> | VentMaster<br><sub>From:TownOfHost-K</sub> | Bomber<br><sub>From:TownOfHost E</sub> | Miner<br><sub>From:TownOfUs</sub> |
-| QuickShooter<br><sub>From:TownOfHost E</sub> | Mafioso<br><sub>From:Project Lotus</sub> | Morphling<br><sub>From:TheOtherRoles</sub> | Lurker<br><sub>From:TownOfHost Re-Edited</sub> |
-| LovingImpostor<br><sub>From:Love Couple Mod</sub> | RiftMaker<br><sub>From:EndlessHostRoles</sub> | Limiter<br><sub>From:TownOfHost-K</sub> | Wiper<br><sub>From:EndlessHostRoles</sub> |
-| Wildling<br><sub>From:TownOfHost Re-Edited</sub> | YinYanger<br><sub>From:EndlessHostRoles</sub> | Fireworker<br><sub>From:TownOfHost</sub> | Hypocrite<br><sub>From:EndlessHostRoles</sub> |
-| Forger<br><sub>From:EndlessHostRoles</sub> | Blackmailer<br><sub>From:TownOfUs</sub> | Bard<br><sub>From:TownOfHost E</sub> | Hypnotist<br><sub>From:TownofHost-Optimized</sub> |
-| KillingMachine<br><sub>From:TownOfHost E</sub> | Librarian<br><sub>From:EndlessHostRoles</sub> | Commander<br><sub>From:EndlessHostRoles</sub> | Capitalist<br><sub>From:TownOfHost E</sub> |
-| Mastermind<br><sub>From:TownOfHost Re-Edited</sub> | CursedWolf<br><sub>From:TownOfHost_Y</sub> | Kamikaze<br><sub>From:EndlessHostRoles</sub> | Assumer<br><sub>From:EndlessHostRoles</sub> |
-| Balancer<br><sub>From:SuperNewRoles</sub> | WaveCannon<br><sub>From:SuperNewRoles</sub> | Consort<br><sub>From:Project Lotus</sub> | Renegade<br><sub>From:EndlessHostRoles</sub> |
-| Councillor<br><sub>From:TownOfHost Re-Edited</sub> | Ventriloquist<br><sub>From:EndlessHostRoles</sub> | Pathologist<br><sub>From:TownOfHost-K</sub> | Witch<br><sub>From:TheOtherRoles</sub> |
-| Nullifier<br><sub>From:EndlessHostRoles</sub> | Kidnapper<br><sub>From:TownofHost-Optimized</sub> | Mercenary<br><sub>From:EndlessHostRoles</sub> | Lightning<br><sub>From:EndlessHostRoles</sub> |
-| ShrineMaiden<br><sub>From:TownOfHost-K</sub> | Devourer<br><sub>From:TownOfHost Re-Edited</sub> | Butcher<br><sub>From:SuperNewRoles</sub> | Chainbinder<br><sub>From:EndlessHostRoles</sub> |
-| Exorcist<br><sub>From:EndlessHostRoles</sub> | Frightener<br><sub>From:EndlessHostRoles</sub> | Obstructer<br><sub>From:EndlessHostRoles</sub> | Skinwalker<br><sub>From:SuperNewRoles</sub> |
-| Riptide | Crosswind<br><sub>From:NebulaontheShip</sub> | Dossun | Gatekeeper<br><sub>From:EndlessHostRoles</sub> |
-| Shuffler | WordKiller<br><sub>From:TownOfHost for E</sub> | Autoscopy<br><sub>From:SuperNewRoles</sub> | EvilBusker<br><sub>From:SuperNewRoles</sub> |
-| Atlas<br><sub>From:ExtremeRoles</sub> | Dominion<br><sub>From:TownOfUs, ExtremeRoles</sub> | Babel<br><sub>From:TownOfHost for E</sub> | Replay |
-| Nova<br><sub>From:UchuAddon</sub> |  |  |  |
+| Ninja<br><sub>From:TheOtherRoles</sub> | Nemesis<br><sub>From:EndlessHostRoles</sub> | BountyHunter<br><sub>From:TheOtherRoles</sub> | Puppeteer<br><sub>From:TownOfHost</sub> |
+| Ballooner<br><sub>From:TownOfHost-K</sub> | Hangman<br><sub>From:TownOfHost E</sub> | Visionary<br><sub>From:EndlessHostRoles</sub> | Hitman<br><sub>From:EndlessHostRoles</sub> |
+| Phantom | PhantomEndKnot | Freezer<br><sub>From:Project Lotus</sub> | Framer<br><sub>From:EndlessHostRoles</sub> |
+| ProgressKiller<br><sub>From:TownOfHost-K</sub> | ProBowler<br><sub>From:TownOfHost-K</sub> | Penguin<br><sub>From:SuperNewRoles</sub> | VentOpener<br><sub>From:TownOfHost-K</sub> |
+| VentMaster<br><sub>From:TownOfHost-K</sub> | Bomber<br><sub>From:TownOfHost E</sub> | Miner<br><sub>From:TownOfUs</sub> | QuickShooter<br><sub>From:TownOfHost E</sub> |
+| Mafioso<br><sub>From:Project Lotus</sub> | Morphling<br><sub>From:TheOtherRoles</sub> | Lurker<br><sub>From:TownOfHost Re-Edited</sub> | LovingImpostor<br><sub>From:Love Couple Mod</sub> |
+| RiftMaker<br><sub>From:EndlessHostRoles</sub> | Limiter<br><sub>From:TownOfHost-K</sub> | Wiper<br><sub>From:EndlessHostRoles</sub> | Wildling<br><sub>From:TownOfHost Re-Edited</sub> |
+| YinYanger<br><sub>From:EndlessHostRoles</sub> | Fireworker<br><sub>From:TownOfHost</sub> | Hypocrite<br><sub>From:EndlessHostRoles</sub> | Forger<br><sub>From:EndlessHostRoles</sub> |
+| Blackmailer<br><sub>From:TownOfUs</sub> | Bard<br><sub>From:TownOfHost E</sub> | Hypnotist<br><sub>From:TownofHost-Optimized</sub> | KillingMachine<br><sub>From:TownOfHost E</sub> |
+| Librarian<br><sub>From:EndlessHostRoles</sub> | Commander<br><sub>From:EndlessHostRoles</sub> | Capitalist<br><sub>From:TownOfHost E</sub> | Mastermind<br><sub>From:TownOfHost Re-Edited</sub> |
+| CursedWolf<br><sub>From:TownOfHost_Y</sub> | Kamikaze<br><sub>From:EndlessHostRoles</sub> | Assumer<br><sub>From:EndlessHostRoles</sub> | Balancer<br><sub>From:SuperNewRoles</sub> |
+| WaveCannon<br><sub>From:SuperNewRoles</sub> | Consort<br><sub>From:Project Lotus</sub> | Renegade<br><sub>From:EndlessHostRoles</sub> | Councillor<br><sub>From:TownOfHost Re-Edited</sub> |
+| Ventriloquist<br><sub>From:EndlessHostRoles</sub> | Pathologist<br><sub>From:TownOfHost-K</sub> | Witch<br><sub>From:TheOtherRoles</sub> | Nullifier<br><sub>From:EndlessHostRoles</sub> |
+| Kidnapper<br><sub>From:TownofHost-Optimized</sub> | Mercenary<br><sub>From:EndlessHostRoles</sub> | Lightning<br><sub>From:EndlessHostRoles</sub> | ShrineMaiden<br><sub>From:TownOfHost-K</sub> |
+| Devourer<br><sub>From:TownOfHost Re-Edited</sub> | Butcher<br><sub>From:SuperNewRoles</sub> | Chainbinder<br><sub>From:EndlessHostRoles</sub> | Exorcist<br><sub>From:EndlessHostRoles</sub> |
+| Frightener<br><sub>From:EndlessHostRoles</sub> | Obstructer<br><sub>From:EndlessHostRoles</sub> | Skinwalker<br><sub>From:SuperNewRoles</sub> | Riptide |
+| Crosswind<br><sub>From:NebulaontheShip</sub> | Dossun | Gatekeeper<br><sub>From:EndlessHostRoles</sub> | Shuffler |
+| WordKiller<br><sub>From:TownOfHost for E</sub> | Autoscopy<br><sub>From:SuperNewRoles</sub> | EvilBusker<br><sub>From:SuperNewRoles</sub> | Atlas<br><sub>From:ExtremeRoles</sub> |
+| Dominion<br><sub>From:TownOfUs, ExtremeRoles</sub> | Babel<br><sub>From:TownOfHost for E</sub> | Replay | Nova<br><sub>From:UchuAddon</sub> |
 
 ### Crewmate (177)
 

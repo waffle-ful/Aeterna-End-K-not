@@ -2,13 +2,13 @@
 
 [English](ROLES-EN.md) ・ [← README に戻る](README.md)
 
-実装済みは合計 **681 役職**（陣営別役職546 + サブ役職・アドオン135）。陣営ごとに整理しています。
+実装済みは合計 **680 役職**（陣営別役職545 + サブ役職・アドオン135）。陣営ごとに整理しています。
 
 ここに並ぶ役職の大半は、ベースである [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) や TownOfHost 系列といった先行 Mod から来ています。実装をそのまま引き継いだものと、参考にして書き直したものが混ざっています。役職名の下の「from ○○」は、その役職を最初に実装した Mod です。各 Mod への謝辞は [README のクレジット](README.md#クレジット)にまとめています。
 
 | 陣営 | 役職数 |
 |------|-------|
-| インポスター | 169 (ヴァニラ4 + リメイク4 + カスタム161) |
+| インポスター | 168 (ヴァニラ4 + リメイク4 + カスタム160) |
 | クルーメイト | 176 (ヴァニラ6 + リメイク7 + カスタム163) |
 | ニュートラル | 141 |
 | カヴン (Coven) | 21 |
@@ -19,7 +19,7 @@
 
 各役職の効果や設定はゲーム内で `/r <役職名>` または `/myrole` で確認できます。
 
-### インポスター系 (169)
+### インポスター系 (168)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -46,26 +46,25 @@
 | ダズラー (Dazzler)<br><sub>From:TownOfHost Re-Edited</sub> | チェンジリング (Changeling)<br><sub>From:StellarRoles</sub> | ツイスター (Twister)<br><sub>From:TownOfHost Re-Edited</sub> | ディスパーサー (Disperser)<br><sub>From:TownOfUs</sub> |
 | デスパクト (Deathpact)<br><sub>From:TownOfHost Re-Edited</sub> | デュエリスト (Duellist)<br><sub>From:EndlessHostRoles</sub> | テレポートキラー (TeleportKiller)<br><sub>From:TownOfHost-K</sub> | トイレファン (ToiletFan)<br><sub>From:SuperNewRoles</sub> |
 | トラップスター (Trapster)<br><sub>From:EndlessHostRoles</sub> | トリックスター (Trickster)<br><sub>From:EndlessHostRoles</sub> | ナイスロガー (NiceLogger)<br><sub>From:TownOfHost-K</sub> | ニューカー (Nuker)<br><sub>From:TownOfHost E</sub> |
-| ニンジャ (Ninja)<br><sub>From:TheOtherRoles</sub> | ネメシス (Nemesis)<br><sub>From:EndlessHostRoles</sub> | ノティファイアー (Notifier)<br><sub>From:TownOfHost-K</sub> | バウンティハンター (BountyHunter)<br><sub>From:TheOtherRoles</sub> |
-| パペッティア (Puppeteer)<br><sub>From:TownOfHost</sub> | バルーナー (Ballooner)<br><sub>From:TownOfHost-K</sub> | ハングマン (Hangman)<br><sub>From:TownOfHost E</sub> | ビショナリー (Visionary)<br><sub>From:EndlessHostRoles</sub> |
-| ヒットマン (Hitman)<br><sub>From:EndlessHostRoles</sub> | ファントム (Phantom) | ファントム (PhantomEndKnot) | フリーザー (Freezer)<br><sub>From:Project Lotus</sub> |
-| フレーマー (Framer)<br><sub>From:EndlessHostRoles</sub> | プログレスキラー (ProgressKiller)<br><sub>From:TownOfHost-K</sub> | プロボウラー (ProBowler)<br><sub>From:TownOfHost-K</sub> | ペンギン (Penguin)<br><sub>From:SuperNewRoles</sub> |
-| ベントオープナー (VentOpener)<br><sub>From:TownOfHost-K</sub> | ベントマスター (VentMaster)<br><sub>From:TownOfHost-K</sub> | ボマー (Bomber)<br><sub>From:TownOfHost E</sub> | マイナー (Miner)<br><sub>From:TownOfUs</sub> |
-| マガジナー (QuickShooter)<br><sub>From:TownOfHost E</sub> | マフィオソ (Mafioso)<br><sub>From:Project Lotus</sub> | モーフィング (Morphling)<br><sub>From:TheOtherRoles</sub> | ラーカー (Lurker)<br><sub>From:TownOfHost Re-Edited</sub> |
-| ラビングインポスター (LovingImpostor)<br><sub>From:Love Couple Mod</sub> | リフトメーカー (RiftMaker)<br><sub>From:EndlessHostRoles</sub> | リミッター (Limiter)<br><sub>From:TownOfHost-K</sub> | ワイパー (Wiper)<br><sub>From:EndlessHostRoles</sub> |
-| ワイルディング (Wildling)<br><sub>From:TownOfHost Re-Edited</sub> | 陰陽師 (YinYanger)<br><sub>From:EndlessHostRoles</sub> | 花火師 (Fireworker)<br><sub>From:TownOfHost</sub> | 偽善者 (Hypocrite)<br><sub>From:EndlessHostRoles</sub> |
-| 偽造者 (Forger)<br><sub>From:EndlessHostRoles</sub> | 恐喝者 (Blackmailer)<br><sub>From:TownOfUs</sub> | 吟遊詩人 (Bard)<br><sub>From:TownOfHost E</sub> | 催眠術師 (Hypnotist)<br><sub>From:TownofHost-Optimized</sub> |
-| 殺人マシーン (KillingMachine)<br><sub>From:TownOfHost E</sub> | 司書 (Librarian)<br><sub>From:EndlessHostRoles</sub> | 指揮官 (Commander)<br><sub>From:EndlessHostRoles</sub> | 資本主義者 (Capitalist)<br><sub>From:TownOfHost E</sub> |
-| 首謀者 (Mastermind)<br><sub>From:TownOfHost Re-Edited</sub> | 呪われた狼 (CursedWolf)<br><sub>From:TownOfHost_Y</sub> | 神風 (Kamikaze)<br><sub>From:EndlessHostRoles</sub> | 想定者 (Assumer)<br><sub>From:EndlessHostRoles</sub> |
-| 天秤 (Balancer)<br><sub>From:SuperNewRoles</sub> | 波動砲 (WaveCannon)<br><sub>From:SuperNewRoles</sub> | 配偶者 (Consort)<br><sub>From:Project Lotus</sub> | 反逆者 (Renegade)<br><sub>From:EndlessHostRoles</sub> |
-| 評議員 (Councillor)<br><sub>From:TownOfHost Re-Edited</sub> | 腹話術師 (Ventriloquist)<br><sub>From:EndlessHostRoles</sub> | 法医 (Pathologist)<br><sub>From:TownOfHost-K</sub> | 魔女 (Witch)<br><sub>From:TheOtherRoles</sub> |
-| 無効主義者 (Nullifier)<br><sub>From:EndlessHostRoles</sub> | 誘拐犯 (Kidnapper)<br><sub>From:TownofHost-Optimized</sub> | 傭兵 (Mercenary)<br><sub>From:EndlessHostRoles</sub> | 落雷 (Lightning)<br><sub>From:EndlessHostRoles</sub> |
-| 巫女 (ShrineMaiden)<br><sub>From:TownOfHost-K</sub> | 貪食者 (Devourer)<br><sub>From:TownOfHost Re-Edited</sub> | ブッチャー (Butcher)<br><sub>From:SuperNewRoles</sub> | チェインバインダー (Chainbinder)<br><sub>From:EndlessHostRoles</sub> |
-| エクソシスト (Exorcist)<br><sub>From:EndlessHostRoles</sub> | フライトナー (Frightener)<br><sub>From:EndlessHostRoles</sub> | オブストラクター (Obstructer)<br><sub>From:EndlessHostRoles</sub> | スキンウォーカー (Skinwalker)<br><sub>From:SuperNewRoles</sub> |
-| リップタイド (Riptide) | 横風 (Crosswind)<br><sub>From:NebulaontheShip</sub> | ドッスン (Dossun) | ゲートキーパー (Gatekeeper)<br><sub>From:EndlessHostRoles</sub> |
-| シャッフラー (Shuffler) | ワードキラー (WordKiller)<br><sub>From:TownOfHost for E</sub> | オートスコピー (Autoscopy)<br><sub>From:SuperNewRoles</sub> | イビルバスカー (EvilBusker)<br><sub>From:SuperNewRoles</sub> |
-| アトラス (Atlas)<br><sub>From:ExtremeRoles</sub> | ドミニオン (Dominion)<br><sub>From:TownOfUs, ExtremeRoles</sub> | バベル (Babel)<br><sub>From:TownOfHost for E</sub> | リプレイ (Replay) |
-| ノヴァ (Nova)<br><sub>From:UchuAddon</sub> |  |  |  |
+| ニンジャ (Ninja)<br><sub>From:TheOtherRoles</sub> | ネメシス (Nemesis)<br><sub>From:EndlessHostRoles</sub> | バウンティハンター (BountyHunter)<br><sub>From:TheOtherRoles</sub> | パペッティア (Puppeteer)<br><sub>From:TownOfHost</sub> |
+| バルーナー (Ballooner)<br><sub>From:TownOfHost-K</sub> | ハングマン (Hangman)<br><sub>From:TownOfHost E</sub> | ビショナリー (Visionary)<br><sub>From:EndlessHostRoles</sub> | ヒットマン (Hitman)<br><sub>From:EndlessHostRoles</sub> |
+| ファントム (Phantom) | ファントム (PhantomEndKnot) | フリーザー (Freezer)<br><sub>From:Project Lotus</sub> | フレーマー (Framer)<br><sub>From:EndlessHostRoles</sub> |
+| プログレスキラー (ProgressKiller)<br><sub>From:TownOfHost-K</sub> | プロボウラー (ProBowler)<br><sub>From:TownOfHost-K</sub> | ペンギン (Penguin)<br><sub>From:SuperNewRoles</sub> | ベントオープナー (VentOpener)<br><sub>From:TownOfHost-K</sub> |
+| ベントマスター (VentMaster)<br><sub>From:TownOfHost-K</sub> | ボマー (Bomber)<br><sub>From:TownOfHost E</sub> | マイナー (Miner)<br><sub>From:TownOfUs</sub> | マガジナー (QuickShooter)<br><sub>From:TownOfHost E</sub> |
+| マフィオソ (Mafioso)<br><sub>From:Project Lotus</sub> | モーフィング (Morphling)<br><sub>From:TheOtherRoles</sub> | ラーカー (Lurker)<br><sub>From:TownOfHost Re-Edited</sub> | ラビングインポスター (LovingImpostor)<br><sub>From:Love Couple Mod</sub> |
+| リフトメーカー (RiftMaker)<br><sub>From:EndlessHostRoles</sub> | リミッター (Limiter)<br><sub>From:TownOfHost-K</sub> | ワイパー (Wiper)<br><sub>From:EndlessHostRoles</sub> | ワイルディング (Wildling)<br><sub>From:TownOfHost Re-Edited</sub> |
+| 陰陽師 (YinYanger)<br><sub>From:EndlessHostRoles</sub> | 花火師 (Fireworker)<br><sub>From:TownOfHost</sub> | 偽善者 (Hypocrite)<br><sub>From:EndlessHostRoles</sub> | 偽造者 (Forger)<br><sub>From:EndlessHostRoles</sub> |
+| 恐喝者 (Blackmailer)<br><sub>From:TownOfUs</sub> | 吟遊詩人 (Bard)<br><sub>From:TownOfHost E</sub> | 催眠術師 (Hypnotist)<br><sub>From:TownofHost-Optimized</sub> | 殺人マシーン (KillingMachine)<br><sub>From:TownOfHost E</sub> |
+| 司書 (Librarian)<br><sub>From:EndlessHostRoles</sub> | 指揮官 (Commander)<br><sub>From:EndlessHostRoles</sub> | 資本主義者 (Capitalist)<br><sub>From:TownOfHost E</sub> | 首謀者 (Mastermind)<br><sub>From:TownOfHost Re-Edited</sub> |
+| 呪われた狼 (CursedWolf)<br><sub>From:TownOfHost_Y</sub> | 神風 (Kamikaze)<br><sub>From:EndlessHostRoles</sub> | 想定者 (Assumer)<br><sub>From:EndlessHostRoles</sub> | 天秤 (Balancer)<br><sub>From:SuperNewRoles</sub> |
+| 波動砲 (WaveCannon)<br><sub>From:SuperNewRoles</sub> | 配偶者 (Consort)<br><sub>From:Project Lotus</sub> | 反逆者 (Renegade)<br><sub>From:EndlessHostRoles</sub> | 評議員 (Councillor)<br><sub>From:TownOfHost Re-Edited</sub> |
+| 腹話術師 (Ventriloquist)<br><sub>From:EndlessHostRoles</sub> | 法医 (Pathologist)<br><sub>From:TownOfHost-K</sub> | 魔女 (Witch)<br><sub>From:TheOtherRoles</sub> | 無効主義者 (Nullifier)<br><sub>From:EndlessHostRoles</sub> |
+| 誘拐犯 (Kidnapper)<br><sub>From:TownofHost-Optimized</sub> | 傭兵 (Mercenary)<br><sub>From:EndlessHostRoles</sub> | 落雷 (Lightning)<br><sub>From:EndlessHostRoles</sub> | 巫女 (ShrineMaiden)<br><sub>From:TownOfHost-K</sub> |
+| 貪食者 (Devourer)<br><sub>From:TownOfHost Re-Edited</sub> | ブッチャー (Butcher)<br><sub>From:SuperNewRoles</sub> | チェインバインダー (Chainbinder)<br><sub>From:EndlessHostRoles</sub> | エクソシスト (Exorcist)<br><sub>From:EndlessHostRoles</sub> |
+| フライトナー (Frightener)<br><sub>From:EndlessHostRoles</sub> | オブストラクター (Obstructer)<br><sub>From:EndlessHostRoles</sub> | スキンウォーカー (Skinwalker)<br><sub>From:SuperNewRoles</sub> | リップタイド (Riptide) |
+| 横風 (Crosswind)<br><sub>From:NebulaontheShip</sub> | ドッスン (Dossun) | ゲートキーパー (Gatekeeper)<br><sub>From:EndlessHostRoles</sub> | シャッフラー (Shuffler) |
+| ワードキラー (WordKiller)<br><sub>From:TownOfHost for E</sub> | オートスコピー (Autoscopy)<br><sub>From:SuperNewRoles</sub> | イビルバスカー (EvilBusker)<br><sub>From:SuperNewRoles</sub> | アトラス (Atlas)<br><sub>From:ExtremeRoles</sub> |
+| ドミニオン (Dominion)<br><sub>From:TownOfUs, ExtremeRoles</sub> | バベル (Babel)<br><sub>From:TownOfHost for E</sub> | リプレイ (Replay) | ノヴァ (Nova)<br><sub>From:UchuAddon</sub> |
 
 ### クルーメイト系 (177)
 

@@ -287,7 +287,6 @@ internal static class EkrRoleCatalog
         ["Morphling"] = "impostor",
         ["Nemesis"] = "impostor",
         ["Ninja"] = "impostor",
-        ["Notifier"] = "impostor",
         ["Nova"] = "impostor",
         ["Nullifier"] = "impostor",
         ["Obstructer"] = "impostor",
