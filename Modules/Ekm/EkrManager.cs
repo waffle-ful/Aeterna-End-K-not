@@ -4362,10 +4362,6 @@ public static class EkrManager
         public int Budget;
         public int Rotation; // field のみ: ラウンドロビン公平化 (PullTick と同型)
 
-        // drag のみ: 前回 snap した時点のホルダー位置 (Penguin.LastDragSnapPos と同型)。番兵は「初回 tick を
-        // 無条件で発火させる」ため遠方に置く (= seconds:1 でも必ず1発打つ)。
-        public Vector2 LastDragSnapPos = new(-9999f, -9999f);
-
         // field のみ
         public IEkrSlotCno FieldCno;
         public float Radius;
@@ -4386,7 +4382,7 @@ public static class EkrManager
 
     private const float CcTickInterval = 1f;             // field の tick 間隔
     private const float CcDragTickInterval = 0.2f;       // drag の tick 間隔 (~5/s = Penguin.DragSnapInterval と同値)
-    private const float CcDragHolderMoveGate = 0.3f;     // drag: ホルダーがこれ未満しか動いていない tick は撃たない (Penguin と同値)
+    private const float CcDragHolderMoveGate = 0.3f;     // drag: 対象がホルダーからこれ未満しか離れていない tick は撃たない (Penguin と同値)
     private const float CcDeadzone = 1.6f; // spec §5: field の最短ゲート (下回る tick はスキップ・予算不消費)
     private const int CcFieldPerTickCap = 5;
     private const int CcDragBudget = 55;   // 0.2秒 tick × 最長10秒 = 50 + 余裕
@@ -4557,14 +4553,13 @@ public static class EkrManager
         Vector2 dest = holderPc.Pos();
         Vector2 from = ctxPc.Pos();
 
-        // ゲートは「対象との距離」ではなく「ホルダーが前回 snap から動いた量」で持つ (Penguin.cs:406 と同型)。
-        // 0.2秒 tick では ctx は常にホルダーの至近にいるので、距離デッドゾーン (field の CcDeadzone) を
-        // 使うと全 tick が空振りして引きずりが成立しない (2026-08-14 実機: 10秒アームで TP 5発だけ)。
-        // ホルダーが止まっている間は撃たない = 送信量は「ホルダーが実際に歩いた分」に比例する。
+        // ゲートは対象とホルダーの距離 0.3u で持つ (Penguin と同型)。field の距離デッドゾーン (CcDeadzone 1.6u) を
+        // 使うと、0.2秒 tick では ctx が常にその内側にいて全 tick が空振りし引きずりが成立しない
+        // (2026-08-14 実機: 10秒アームで TP 5発だけ)。ホルダーの移動量で測ると、ホルダーが止まっている間に
+        // ctx が歩いて離れられる。0.3u なら両方を避けられ、離れていない tick は撃たない (予算不消費)。
         // ⚠ 至近距離の TP は Utils.TP 内で SendOption.None へ降格する (非モッド客への到達はベストエフォート)。
         //   これは Penguin のドラッグと同じ挙動で、ペンギン並みの追従感を採る (2026-08-14)。
-        if (Vector2.Distance(dest, cc.LastDragSnapPos) < CcDragHolderMoveGate) return; // 予算不消費
-        cc.LastDragSnapPos = dest;
+        if (Vector2.Distance(dest, from) < CcDragHolderMoveGate) return; // 予算不消費
 
         // 壁越えは引かない (TickField / SuperCannonShot.PullTick と同じ方針 — 壁内へ埋め込むと非モッドが
         // スタックする)。着地点はホルダーの現在位置なので通常は歩ける場所だが、ホルダーが直前に vent や
