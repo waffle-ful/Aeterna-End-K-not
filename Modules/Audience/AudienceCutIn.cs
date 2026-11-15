@@ -225,6 +225,8 @@ internal static partial class AudienceCutIn
         }
 
         SetLayer(rt);
+        bool buried = ScreenOverlayOrder.ScreenCovers;
+        ScreenOverlayOrder.Apply(rt, ScreenOverlayOrder.AudienceCutIn, buried);
 
         bool hasCrew = crew;
         bool hasCrewGlow = crewGlow;
@@ -235,6 +237,7 @@ internal static partial class AudienceCutIn
         while (t < dur)
         {
             if (!root || _root != root || ShouldStop()) break;
+            ScreenOverlayOrder.Track(rt, ScreenOverlayOrder.AudienceCutIn, ref buried);
 
             float dt = Time.deltaTime;
             t += dt;
@@ -798,6 +801,7 @@ internal static partial class AudienceCutIn
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
         sr.color = color;
+        sr.sortingOrder = ScreenOverlayOrder.OrderFor(ScreenOverlayOrder.AudienceCutIn);
         return sr;
     }
 

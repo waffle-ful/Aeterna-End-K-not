@@ -34,6 +34,8 @@ public class DevBuildBanner : MonoBehaviour
         // 起動直後は Translator.Init() より前に OnGUI が回る。翻訳テーブルが揃うまでは描かない
         // (ここで GetString を引くと NRE で _faulted が立ち、以後そのセッションは二度と出なくなる)。
         if (!Translator.IsInitialized) return false;
+        // IMGUI は常に最前面に描かれるので、全面を覆う画面 (ロビー設定・歯車など) が開いている間は出さない
+        if (ScreenOverlayOrder.ScreenCovers) return false;
         // ゲーム中は役職 HUD と重なるので出さない (見せたいのはロビー画面)
         return !GameStates.InGame;
     }

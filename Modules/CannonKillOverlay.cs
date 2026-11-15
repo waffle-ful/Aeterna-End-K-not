@@ -98,6 +98,8 @@ internal static class CannonKillOverlay
 
         _crew = crew;
         SetLayer(root.transform);
+        bool buried = ScreenOverlayOrder.ScreenCovers;
+        ScreenOverlayOrder.Apply(root.transform, ScreenOverlayOrder.CannonKillOverlay, buried);
 
         int colorId = lp.Data.DefaultOutfit.ColorId;
         Color bodyColor = colorId >= 0 && colorId < Palette.PlayerColors.Length ? Palette.PlayerColors[colorId] : FxMath.Rgba(0.8f, 0.1f, 0.1f);
@@ -121,6 +123,7 @@ internal static class CannonKillOverlay
         while (t < Duration)
         {
             if (!root || GameStates.IsMeeting || !GameStates.InGame) break;
+            ScreenOverlayOrder.Track(root.transform, ScreenOverlayOrder.CannonKillOverlay, ref buried);
 
             float dt = Time.deltaTime;
             t += dt;
@@ -212,6 +215,7 @@ internal static class CannonKillOverlay
                     if (deadBody)
                     {
                         deadBody.gameObject.layer = Layer;
+                        deadBody.sortingOrder = ScreenOverlayOrder.OrderFor(ScreenOverlayOrder.CannonKillOverlay);
                         deadBody.transform.localPosition = FxMath.V3(0f, -0.55f, 0f);
                     }
                 }
@@ -320,6 +324,7 @@ internal static class CannonKillOverlay
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
         sr.color = color;
+        sr.sortingOrder = ScreenOverlayOrder.OrderFor(ScreenOverlayOrder.CannonKillOverlay);
         go.transform.localPosition = FxMath.V3(pos.x, pos.y, z);
         go.transform.localScale = FxMath.V3(s0, s0, 1f);
 
@@ -338,6 +343,7 @@ internal static class CannonKillOverlay
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
         sr.color = color;
+        sr.sortingOrder = ScreenOverlayOrder.OrderFor(ScreenOverlayOrder.CannonKillOverlay);
         return sr;
     }
 

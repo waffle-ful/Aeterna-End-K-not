@@ -100,6 +100,8 @@ internal static class ExplosionKillOverlay
         catch (System.Exception e) { Utils.ThrowException(e); }
 
         SetLayer(root.transform);
+        bool buried = ScreenOverlayOrder.ScreenCovers;
+        ScreenOverlayOrder.Apply(root.transform, ScreenOverlayOrder.KillOverlay, buried);
 
         int colorId = victim.DefaultOutfit.ColorId;
         Color bodyColor = colorId >= 0 && colorId < Palette.PlayerColors.Length ? Palette.PlayerColors[colorId] : FxMath.Rgba(0.8f, 0.1f, 0.1f);
@@ -120,6 +122,7 @@ internal static class ExplosionKillOverlay
         while (t < Duration)
         {
             if (!root || GameStates.IsMeeting || !GameStates.InGame && !GameStates.IsLobby) break;
+            ScreenOverlayOrder.Track(root.transform, ScreenOverlayOrder.KillOverlay, ref buried);
 
             float dt = Time.deltaTime;
             t += dt;
@@ -163,6 +166,7 @@ internal static class ExplosionKillOverlay
                     SpawnBoom(root.transform, parts, bodyColor);
                     deadBody = SpawnDeadBody(root.transform, colorId);
                     SetLayer(root.transform);
+                    ScreenOverlayOrder.Apply(root.transform, ScreenOverlayOrder.KillOverlay, buried);
                 }
             }
             else
@@ -256,6 +260,7 @@ internal static class ExplosionKillOverlay
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
         sr.color = color;
+        sr.sortingOrder = ScreenOverlayOrder.OrderFor(ScreenOverlayOrder.KillOverlay);
         go.transform.localPosition = FxMath.V3(pos.x, pos.y, z);
         go.transform.localScale = FxMath.V3(s0, s0, 1f);
         go.transform.localRotation = FxMath.RotZ(rot);

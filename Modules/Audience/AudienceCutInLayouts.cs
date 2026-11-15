@@ -112,6 +112,8 @@ internal static partial class AudienceCutIn
         Layout layout = NewLayout(kindKey);
         layout.Build(c);
         SetLayer(c.Rt);
+        bool buried = ScreenOverlayOrder.ScreenCovers;
+        ScreenOverlayOrder.Apply(c.Rt, ScreenOverlayOrder.AudienceCutIn, buried);
 
         float dur = c.Duration;
         float closeFrom = dur - CloseLen;
@@ -120,6 +122,7 @@ internal static partial class AudienceCutIn
         while (t < dur)
         {
             if (!root || _root != root || ShouldStop()) break;
+            ScreenOverlayOrder.Track(c.Rt, ScreenOverlayOrder.AudienceCutIn, ref buried);
 
             float dt = Time.deltaTime;
             t += dt;

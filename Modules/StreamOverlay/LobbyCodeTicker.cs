@@ -54,9 +54,8 @@ public class LobbyCodeTicker : MonoBehaviour
         AmongUsClient client = AmongUsClient.Instance;
         if (!Il2Direct.Alive(client) || !Il2Direct.AmHost(client)) return false;
         if (LobbyCodeBubbleOptions.TickerEnabled == null || !LobbyCodeBubbleOptions.TickerEnabled.GetBool()) return false;
-        // IMGUI は常に最前面に描かれるので、歯車の設定画面が開いている間は出さない
-        OptionsMenuBehaviour gameMenu = HudManager.Instance.GameMenu;
-        if (gameMenu && gameMenu.IsOpen) return false;
+        // IMGUI は常に最前面に描かれるので、全面を覆う画面 (ロビー設定・役職説明・歯車など) が開いている間は出さない
+        if (ScreenOverlayOrder.ScreenCovers) return false;
         return GameStates.IsLobby;
     }
 

@@ -164,6 +164,8 @@ internal static class SpecialKillOverlay
         }
 
         SetLayer(root.transform);
+        bool buried = ScreenOverlayOrder.ScreenCovers;
+        ScreenOverlayOrder.Apply(root.transform, ScreenOverlayOrder.KillOverlay, buried);
 
         int colorId = victim.DefaultOutfit.ColorId;
         ExplosionFx.BloodColors(colorId, out BloodLight, out BloodRed, out BloodDeep);
@@ -191,6 +193,7 @@ internal static class SpecialKillOverlay
         while (t < Duration)
         {
             if (!root || GameStates.IsMeeting || !GameStates.InGame && !GameStates.IsLobby) break;
+            ScreenOverlayOrder.Track(root.transform, ScreenOverlayOrder.KillOverlay, ref buried);
 
             float dt = Time.deltaTime;
             t += dt;
@@ -222,6 +225,7 @@ internal static class SpecialKillOverlay
                 if (crew) crew.gameObject.SetActive(false);
                 deadBody = ExplosionKillOverlay.SpawnDeadBody(root.transform, colorId);
                 SetLayer(root.transform);
+                ScreenOverlayOrder.Apply(root.transform, ScreenOverlayOrder.KillOverlay, buried);
 
                 if (deadBody)
                 {
@@ -615,6 +619,7 @@ internal static class SpecialKillOverlay
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = _solid;
         sr.color = color;
+        sr.sortingOrder = ScreenOverlayOrder.OrderFor(ScreenOverlayOrder.KillOverlay);
         go.transform.localPosition = FxMath.V3(at.x, at.y, -0.8f);
         go.transform.localRotation = FxMath.RotZ(angle);
         go.transform.localScale = FxMath.V3(0f, 0.12f, 1f);
@@ -634,6 +639,7 @@ internal static class SpecialKillOverlay
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
         sr.color = FxMath.Rgba(color.r, color.g, color.b, 0f);
+        sr.sortingOrder = ScreenOverlayOrder.OrderFor(ScreenOverlayOrder.KillOverlay);
         go.transform.localPosition = FxMath.V3(pos.x, pos.y, z);
         go.transform.localScale = FxMath.V3(s0, s0 * squash, 1f);
         go.transform.localRotation = FxMath.RotZ(rot);
@@ -726,6 +732,7 @@ internal static class SpecialKillOverlay
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = _solid;
         sr.color = color;
+        sr.sortingOrder = ScreenOverlayOrder.OrderFor(ScreenOverlayOrder.KillOverlay);
         go.transform.localPosition = FxMath.V3(x, y, z);
         go.transform.localScale = FxMath.V3(w, h, 1f);
     }

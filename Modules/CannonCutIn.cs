@@ -143,6 +143,8 @@ internal static class CannonCutIn
         catch (System.Exception e) { Utils.ThrowException(e); }
 
         SetLayer(root.transform);
+        bool buried = ScreenOverlayOrder.ScreenCovers;
+        ScreenOverlayOrder.Apply(root.transform, ScreenOverlayOrder.CannonCutIn, buried);
         _crew = crew;
         bool hasCrew = crew;
         bool hasText = text;
@@ -157,6 +159,7 @@ internal static class CannonCutIn
         {
             if (!root || GameStates.IsMeeting || !GameStates.InGame) break;
             if (hasKo && ko.IsOpen) break;
+            ScreenOverlayOrder.Track(root.transform, ScreenOverlayOrder.CannonCutIn, ref buried);
 
             float dt = Time.deltaTime;
             t += dt;
@@ -236,6 +239,7 @@ internal static class CannonCutIn
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = _white;
         sr.color = color;
+        sr.sortingOrder = ScreenOverlayOrder.OrderFor(ScreenOverlayOrder.CannonCutIn);
         return sr;
     }
 
