@@ -43,6 +43,7 @@ public class ExitHook : MonoBehaviour
         try
         {
             Logger.Info($"Exit hook fired ({reason}); stopping watchdog / companion", "ExitHook");
+            SettingsUI.SettingsPages.FlushOnLeave();
             WatchdogLauncher.OnGameQuit();
 
             // 相棒アプリ (AI実況) は AU の子プロセスなので、ここで明示的に畳む。

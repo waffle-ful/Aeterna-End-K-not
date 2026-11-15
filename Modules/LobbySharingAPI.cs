@@ -30,6 +30,9 @@ internal static class ExitGamePatch
 
         Logger.Msg($"Exiting game - reason: {reason}", "ExitGamePatch.Prefix");
 
+        // 設定画面を開いたまま抜けた時の保存 (本編の設定が残っているのはこの時点まで)
+        SettingsUI.SettingsPages.FlushOnLeave();
+
         // 転ばぬ先の杖: 公式サーバーで「Hacking」切断されたら、着地画面で理由+対処をホストに知らせる。
         // NetworkMode はこの Prefix 時点ではまだ OnlineGame なので IsOfficialServer() が正しく判定できる。
         // 配信者向け: 公式 kick / エラー / タイムアウトで切断されたら新しい部屋を自動で立て直す。
