@@ -355,7 +355,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[MiraAPI](https://github.com/All-Of-Us-Mods/MiraAPI)** (All-Of-Us-Mods、LGPL-2.1) — UI スプライト（ページ送りボタン 2 点・チェックマーク 2 点）、役職情報タブのパネル
 - **[More Gamemodes](https://github.com/Rabek009/MoreGamemodes)** (Rabek009) — カスタムネットオブジェクト (CNO)、チャット制御と消去、プレイヤー操作まわりの補助処理、ベントの出入りまわりのパッチ、投票キックの処理、オンライン権限の確認
 - **[More Roles Plus](https://github.com/haru03741-glitch/More-Roles-Plus)** (haru03741-glitch、GPL-3.0) — 能力ボタンを複製して右下に並べる処理（フリープレイのスポーン地点エディタ）、新しい設定メニュー（TownOfHost_L 経由）
-- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** / [ソースコード (Nebula-Public)](https://github.com/Dolly1016/Nebula-Public) (Dolly1016 他、GPL-3.0 / NebulaAPI は LGPL-3.0) — incremental GC の無効化と GC の先撃ち、設定画面の部品 (窓・スクロールする欄・ボタン)、役職カードの一覧と役職ごとの設定頁 (More Roles Plus・TownOfHost_L 経由)。独自役職と独自 API を多数持つ Mod
+- **[Nebula on the Ship (NoS)](https://github.com/Dolly1016/Nebula)** / [ソースコード (Nebula-Public)](https://github.com/Dolly1016/Nebula-Public) (Dolly1016 他、GPL-3.0 / NebulaAPI は LGPL-3.0) — incremental GC の無効化と GC の先撃ち、設定画面の部品 (窓・スクロールする欄・ボタン)、役職カードの一覧と役職ごとの設定頁 (More Roles Plus・TownOfHost_L 経由)、暴走鬼のアイデア。独自役職と独自 API を多数持つ Mod
 - **[Reactor](https://github.com/NuclearPowered/Reactor)** / [XtraCube fork](https://github.com/XtraCube/Reactor) (LGPL-3.0) — modded ハンドシェイク、コンパイラ生成オブジェクト・ステートマシンのラッパー、カスタムサーバーの 5 秒タイムアウト解除
 - **[Revolutionary Host Roles](https://github.com/sansaaaaai/Revolutionary-host-roles)** (sansaaaaai) — 独自役職とホスト向け機能を追加する TOH 系列の Mod
 - **[Stellar Roles](https://github.com/Mr-Fluuff/StellarRolesAU)** (Mr-Fluuff) — 独自役職を多数持つ Among Us の役職 Mod

@@ -19,7 +19,7 @@ Most of the roles listed here come from the base mod [Endless Host Roles](https:
 
 Use `/r <role name>` or `/myrole` in-game to check each role's effects and settings.
 
-### Impostor (166)
+### Impostor (167)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -64,7 +64,7 @@ Use `/r <role name>` or `/myrole` in-game to check each role's effects and setti
 | Skinwalker<br><sub>From:SuperNewRoles</sub> | Riptide | Crosswind<br><sub>From:NebulaontheShip</sub> | Dossun |
 | Gatekeeper<br><sub>From:EndlessHostRoles</sub> | Shuffler | WordKiller<br><sub>From:TownOfHost for E</sub> | Autoscopy<br><sub>From:SuperNewRoles</sub> |
 | EvilBusker<br><sub>From:SuperNewRoles</sub> | Atlas<br><sub>From:ExtremeRoles</sub> | Dominion<br><sub>From:TownOfUs, ExtremeRoles</sub> | Babel<br><sub>From:TownOfHost for E</sub> |
-| Replay | Nova<br><sub>From:UchuAddon</sub> |  |  |
+| Replay | Nova<br><sub>From:UchuAddon</sub> | Rampager<br><sub>From:NebulaontheShip</sub> |  |
 
 ### Crewmate (177)
 

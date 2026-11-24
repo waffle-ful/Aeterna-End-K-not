@@ -101,7 +101,10 @@ public class Rampager : RoleBase
 
     public override void ApplyGameOptions(IGameOptions opt, byte playerId)
     {
-        if (Options.UsePhantomBasis.GetBool()) AURoleOptions.PhantomCooldown = AbilityCooldown.GetInt();
+        float cd = AbilityCooldown.GetInt();
+        // イントロ直後のキル封じの間は押せないようにする
+        if (IntroCutsceneDestroyPatch.PreventKill) cd = Mathf.Max(cd, (Options.StartingKillCooldown?.GetFloat() ?? 10f) + 2f);
+        if (Options.UsePhantomBasis.GetBool()) AURoleOptions.PhantomCooldown = cd;
         if (Rampaging) opt.SetFloat(FloatOptionNames.ImpostorLightMod, RampageVision.GetFloat());
     }
 
@@ -333,7 +336,7 @@ public class Rampager : RoleBase
         if (float.IsPositiveInfinity(EndAt))
             return Chilling ? $"<#ff3030>{GetString("RampagerTransform")}</color>" : string.Empty;
 
-        int seconds = Mathf.Max(0, Mathf.CeilToInt(EndAt - Time.realtimeSinceStartup));
+        int seconds = System.Math.Max(0, (int)System.Math.Ceiling(EndAt - Time.realtimeSinceStartup));
         string text = string.Format(GetString("RampagerRemaining"), seconds);
         int need = KillsForTrance.GetInt();
         if (Trance) text += " " + GetString("RampagerTrance");

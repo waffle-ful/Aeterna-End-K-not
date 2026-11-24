@@ -19,7 +19,7 @@
 
 各役職の効果や設定はゲーム内で `/r <役職名>` または `/myrole` で確認できます。
 
-### インポスター系 (166)
+### インポスター系 (167)
 
 |   |   |   |   |
 |---|---|---|---|
@@ -64,7 +64,7 @@
 | スキンウォーカー (Skinwalker)<br><sub>From:SuperNewRoles</sub> | リップタイド (Riptide) | 横風 (Crosswind)<br><sub>From:NebulaontheShip</sub> | ドッスン (Dossun) |
 | ゲートキーパー (Gatekeeper)<br><sub>From:EndlessHostRoles</sub> | シャッフラー (Shuffler) | ワードキラー (WordKiller)<br><sub>From:TownOfHost for E</sub> | オートスコピー (Autoscopy)<br><sub>From:SuperNewRoles</sub> |
 | イビルバスカー (EvilBusker)<br><sub>From:SuperNewRoles</sub> | アトラス (Atlas)<br><sub>From:ExtremeRoles</sub> | ドミニオン (Dominion)<br><sub>From:TownOfUs, ExtremeRoles</sub> | バベル (Babel)<br><sub>From:TownOfHost for E</sub> |
-| リプレイ (Replay) | ノヴァ (Nova)<br><sub>From:UchuAddon</sub> |  |  |
+| リプレイ (Replay) | ノヴァ (Nova)<br><sub>From:UchuAddon</sub> | 暴走鬼 (Rampager)<br><sub>From:NebulaontheShip</sub> |  |
 
 ### クルーメイト系 (177)
 
