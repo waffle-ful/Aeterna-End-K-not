@@ -49,6 +49,15 @@ public class Rampager : RoleBase
     private float SavedSpeed;
     private float BoostedSpeed;
 
+    /// <summary>ホストが忘我の暴走鬼の時、target (生きている仲間のインポスター) をキルの対象にできるか</summary>
+    public static bool HostCanKillAlly(PlayerControl target)
+    {
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!On || lp == null || target == null || target.PlayerId == lp.PlayerId) return false;
+        if (!Main.PlayerStates.TryGetValue(lp.PlayerId, out PlayerState state) || state.Role is not Rampager { Rampaging: true, Trance: true }) return false;
+        return target.IsAlive() && target.Is(CustomRoleTypes.Impostor);
+    }
+
     /// <summary>暴走の間か。暴走の間はボタンのクールを付けない (もう一度押して鎮静化できるように)</summary>
     public bool IsRampaging => Rampaging;
 
@@ -123,6 +132,8 @@ public class Rampager : RoleBase
     private void Trigger(PlayerControl pc)
     {
         if (!AmongUsClient.Instance.AmHost || !pc.IsAlive() || !GameStates.IsInTask) return;
+        // イントロ直後のキル封じの間は暴走しない (ペットのボタンにはクールが付かない)
+        if (IntroCutsceneDestroyPatch.PreventKill) return;
 
         if (Rampaging)
         {
@@ -194,6 +205,8 @@ public class Rampager : RoleBase
     {
         PlayerControl pc = Player;
         if (!Trance || pc == null || !pc.IsAlive()) return;
+        // ホストの手元で見え方を替えると仲間の本物の役職が替わるので、ホストはキルの対象の選び方で仲間を足す (HostCanKillAlly)
+        if (pc.AmOwner) return;
 
         if (SeekerBody.InWindow)
         {

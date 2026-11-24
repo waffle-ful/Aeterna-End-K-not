@@ -76,7 +76,7 @@ public static class SeekerBody
     public static bool InWindow => phase != Phase.Idle && GameStates.InGame;
     public static bool IsMasked(byte playerId) => masked.Count > 0 && masked.ContainsKey(playerId);
     /// <summary>窓の暗さを掛けている人か (人ごとの設定を組む時に視界を狭める)</summary>
-    public static bool IsDimmed(byte playerId) => dimmed.Count > 0 && dimmed.Contains(playerId);
+    public static bool IsDimmed(byte playerId) => dimmed.Count > 0 && GameStates.InGame && dimmed.Contains(playerId);
     /// <summary>通報を預かる間か (窓の間と、SetRole を送った直後)</summary>
     public static bool HoldsReports => InWindow || Time.realtimeSinceStartup < settleUntil;
 

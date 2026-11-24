@@ -2597,16 +2597,15 @@ internal static class ExtendedPlayerControl
         public bool IsValidTargetForKillButton(RoleBehaviour localRole, Vector2 lpPos)
         {
             // Code from AU code for kill button check target, without distance check but check colliders
-            if (localRole.IsValidTarget(player.Data) && player.Collider.enabled)
-            {
-                Vector2 vector = player.GetTruePosition() - lpPos;
-                float magnitude = vector.magnitude;
-                if (!PhysicsHelpers.AnyNonTriggersBetween(lpPos, vector.normalized, magnitude, Constants.ShipAndObjectsMask))
-                {
-                    return true;
-                }
-            }
-            return false;
+            return localRole.IsValidTarget(player.Data) && player.IsReachableForKillButton(lpPos);
+        }
+
+        // キルボタンの対象の判定のうち、役職によらない所 (当たり判定があり、間に壁が無い)
+        public bool IsReachableForKillButton(Vector2 lpPos)
+        {
+            if (!player.Collider.enabled) return false;
+            Vector2 vector = player.GetTruePosition() - lpPos;
+            return !PhysicsHelpers.AnyNonTriggersBetween(lpPos, vector.normalized, vector.magnitude, Constants.ShipAndObjectsMask);
         }
 
         public List<PlayerControl> GetPlayersInAbilityRangeSorted(bool ignoreColliders = false)
