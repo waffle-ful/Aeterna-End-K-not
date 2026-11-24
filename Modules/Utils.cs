@@ -4216,7 +4216,7 @@ public static class Utils
                             targetName += GameStates.IsLobby || TargetSuffix.ToString() == string.Empty ? string.Empty : $"{newLineBeforeSuffix}{TargetSuffix.ToString().Trim()}";
 
                             // Camouflage
-                            if (Camouflage.IsCamouflage && !camouflageIsForMeeting) targetName = $"<size=0>{targetName}</size>";
+                            if ((Camouflage.IsCamouflage || SeerCamouflage.IsActive(seer.PlayerId)) && !camouflageIsForMeeting) targetName = $"<size=0>{targetName}</size>";
 
                             targetName = targetName.Trim().Replace("color=", "").Replace("<#ffffff><#ffffff>", "<#ffffff>");
                             if (targetName.EndsWith("</size>")) targetName = targetName.Remove(targetName.Length - 7);

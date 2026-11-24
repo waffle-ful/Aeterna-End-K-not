@@ -179,6 +179,8 @@ public class Rampager : RoleBase
         if (Trance || need <= 0 || RampageKills < need) return;
         Trance = true;
         Logger.Info($"忘我: {killer.GetNameWithRole()}", nameof(Rampager));
+        // 忘我の間は、周りの人を見た目で見分けられなくなる
+        SeerCamouflage.Begin(killer);
         SendTranceViews();
         Utils.NotifyRoles(SpecifySeer: killer, SpecifyTarget: killer);
     }
@@ -285,6 +287,7 @@ public class Rampager : RoleBase
         TranceSendPending = false;
         EndAt = float.PositiveInfinity;
         RestoreTranceViews();
+        SeerCamouflage.End(Player);
 
         // 暴走の間に他の効果が足の速さを決め直していなければ元へ、決め直していれば上げた分だけ戻す
         if (Main.AllPlayerSpeed.TryGetValue(RampagerId, out float speed))

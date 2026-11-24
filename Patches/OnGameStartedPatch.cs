@@ -422,6 +422,7 @@ internal static class ChangeRoleSettings
             Camouflage.BlockCamouflage = false;
             Camouflage.Init();
             SeekerBody.Init();
+            SeerCamouflage.Init();
             
             RoleResult = [];
 
