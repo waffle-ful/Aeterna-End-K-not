@@ -156,6 +156,14 @@ public class Missioneer : RoleBase
 
     public override bool CanUseSabotage(PlayerControl pc) => false;
 
+    /// <summary>ホストがキルのミッション中のミッショナーの時、target (生きている他の人) をキルの対象にできるか</summary>
+    public static bool HostCanKill(PlayerControl target)
+    {
+        PlayerControl lp = PlayerControl.LocalPlayer;
+        if (!On || lp == null || target == null || target.PlayerId == lp.PlayerId || !lp.IsAlive()) return false;
+        return Main.PlayerStates.TryGetValue(lp.PlayerId, out PlayerState state) && state.Role is Missioneer m && m.IsKillMission() && target.IsAlive();
+    }
+
     private bool IsKillMission() => NowMission != MissionKind.None && (int)NowMission < 10;
 
     private int GetPoint(MissionKind mission)
@@ -490,7 +498,8 @@ public class Missioneer : RoleBase
                     if (MeetingStates.MeetingNum != meetingNum || GameStates.IsMeeting || GameStates.IsEnded) return;
 
                     PlayerControl m = Utils.GetPlayerById(MissioneerId);
-                    if (m == null || !m.IsAlive()) return;
+                    // ホストの手元で送ると本当の役職が替わるので、ホストはキルの対象の選び方で全員を足す (HostCanKill)
+                    if (m == null || !m.IsAlive() || m.AmOwner) return;
 
                     other.RpcSetRoleDesync(RoleTypes.Crewmate, m.OwnerId);
                 }, DesyncStaggerStep * (i + 1), log: false);

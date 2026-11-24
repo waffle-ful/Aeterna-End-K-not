@@ -19,8 +19,9 @@ public static class FixedUpdateCaller
     {
         RoleBehaviour role = KillScanLocalRole;
         if (role != null ? pc.IsValidTargetForKillButton(role, KillScanLocalPos) : pc.IsValidTargetForKillButton()) return true;
-        // 本編の判定は仲間のインポスターを外すので、忘我の暴走鬼のホストだけ足す
-        return Roles.Rampager.On && Roles.Rampager.HostCanKillAlly(pc) && pc.IsReachableForKillButton(role != null ? KillScanLocalPos : PlayerControl.LocalPlayer.GetTruePosition());
+        // 本編の判定はインポスターの仲間を外すので、仲間も斬れるホスト (忘我の暴走鬼・キルのミッション中のミッショナー) だけ足す
+        if (!(Roles.Rampager.On && Roles.Rampager.HostCanKillAlly(pc)) && !(Roles.Missioneer.On && Roles.Missioneer.HostCanKill(pc))) return false;
+        return pc.IsReachableForKillButton(role != null ? KillScanLocalPos : PlayerControl.LocalPlayer.GetTruePosition());
     }
 
     private static int NonLowLoadPlayerIndex;

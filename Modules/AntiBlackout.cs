@@ -69,7 +69,8 @@ public static class AntiBlackout
                     PlayerControl fakeImp = Main.EnumeratePlayerControls().FirstOrDefault(x =>
                         x.PlayerId != akaId && x != CheckForEndVotingPatch.TempExiledPlayer?.Object &&
                         (!Main.PlayerStates[x.PlayerId].IsDead || x.GetCountTypes() == CountTypes.OutOfGame));
-                    if (akaPc && fakeImp) fakeImp.RpcSetRoleDesync(RoleTypes.Impostor, akaPc.OwnerId);
+                    // ホストの画面は暗転しない上、ホストの手元で送ると fakeImp の本当の役職が替わるので送らない
+                    if (akaPc && fakeImp && !akaPc.AmOwner) fakeImp.RpcSetRoleDesync(RoleTypes.Impostor, akaPc.OwnerId);
                 }
 
                 // Don't skip tasks since we couldn't set the optimal roles.
