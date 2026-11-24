@@ -479,6 +479,7 @@ public static class RoleOrigins
         [CustomRoles.Skinwalker] = "SNR",
         [CustomRoles.Riptide] = "",
         [CustomRoles.Dossun] = "",
+        [CustomRoles.Rampager] = "NoS",
         [CustomRoles.Maguro] = "SNR",
         [CustomRoles.Supernova] = "SNR",
         [CustomRoles.MapExtender] = "TOR",

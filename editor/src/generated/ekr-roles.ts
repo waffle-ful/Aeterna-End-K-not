@@ -301,6 +301,7 @@ export const ROLE_META: readonly RoleMeta[] = [
   { id: "Puppeteer", team: "impostor", ja: "パペッティア", en: "Puppeteer" },
   { id: "QuickKiller", team: "impostor", ja: "クイックキラー", en: "Quick Killer" },
   { id: "QuickShooter", team: "impostor", ja: "マガジナー", en: "Quick Shooter" },
+  { id: "Rampager", team: "impostor", ja: "暴走鬼", en: "Rampager" },
   { id: "Renegade", team: "impostor", ja: "反逆者", en: "Renegade" },
   { id: "Replay", team: "impostor", ja: "リプレイ", en: "Replay" },
   { id: "RiftMaker", team: "impostor", ja: "リフトメーカー", en: "Rift Maker" },

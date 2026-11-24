@@ -4662,6 +4662,7 @@ public static class Utils
             Archer { IsSetting: true } => true,
             Centralizer { MarkedPosition: not null } => true,
             Dossun { CurrentPhase: Dossun.Phase.Placed } => true,
+            Rampager { IsRampaging: true } => true,
             Nova { CurrentPhase: Nova.Phase.Steering or Nova.Phase.Flying } => true,
             Escapist { EscapistLocation: null } => true,
             Silencer when Silencer.ForSilencer.Count == 0 => true,
@@ -4797,6 +4798,7 @@ public static class Utils
             CustomRoles.SandboxJackal => (int)SandboxJackal.PlaceCooldown.GetFloat(),
             CustomRoles.JackalPolice => (int)JackalPolice.HandcuffCooldown.GetFloat(),
             CustomRoles.Dossun => Dossun.AbilityCooldown.GetInt(),
+            CustomRoles.Rampager => Rampager.AbilityCooldown.GetInt(),
             CustomRoles.Nova => Nova.AbilityCooldown.GetInt(),
             _ => -1
         };

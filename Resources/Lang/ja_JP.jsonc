@@ -13270,6 +13270,21 @@
   "Dossun.Recalled": "ブロックを回収しました。",
   "Dossun.Expired": "ブロックは時間切れで消滅しました。",
 
+  /* --- Rampager --- */
+  "Rampager": "暴走鬼",
+  "RampagerInfo": "暴走して素早く狩る。ただし正体は丸見え",
+  "RampagerInfoLong": "(<#ff1919>インポスター</color>):\n<size=80%>ペットボタン (ファントムの基底の時は透明化のボタン) で、決めた時間だけ暴走する。暴走中は本編のかくれんぼの鬼の姿 (マスク姿) になり、全員に正体が見える。そのかわり、キルクールが短くなり、足が速くなり、視界が広がる。\n時間が過ぎるか、会議が始まるか、もう一度ボタンを押す (鎮静化が ON の時) と暴走は終わる。\n1 回の暴走で決めた人数をキルすると忘我になり、暴走が終わるまで仲間のインポスターもキルできるようになる。\nマスク姿を付ける時に、全員の画面が 3 秒ほど暗くなり (自分の周りしか見えない)、その間は誰も動けない。\nシェリフなど自分の画面でキルを持つ人には、マスク姿は見えない。</size>",
+  "Rampager.RampageKillCooldown": "暴走中のキルクール",
+  "Rampager.RampageSpeed": "暴走中の足の速さ",
+  "Rampager.RampageVision": "暴走中の視界",
+  "Rampager.CanCalmDown": "鎮静化できる",
+  "Rampager.KillsForTrance": "忘我までのキル数 (0 で忘我にならない)",
+  "RampagerButtonText": "暴走",
+  "RampagerRemaining": "<#ff3030>暴走中 あと{0}秒</color>",
+  "RampagerChill": "……背筋が凍った",
+  "RampagerTransform": "暴走……",
+  "RampagerTrance": "<#ff3030>忘我</color>",
+
   /* --- Banker --- */
   "Banker": "バンカー",
   "BankerInfo": "タスクやキルでコインを貯めて勝利を目指す",

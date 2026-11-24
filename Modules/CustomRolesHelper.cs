@@ -74,6 +74,7 @@ internal static class CustomRolesHelper
         CustomRoles.WaveCannon,
         CustomRoles.Sandbox,
         CustomRoles.Dossun,
+        CustomRoles.Rampager,
         // 藁人形は呪いの指定が、カースメーカーは呪いの中断と起爆が、ペットボタンでしか行えない。
         // ペット無効のロビーに出すと藁人形は何もできず、カースメーカーは呪いを起爆できない。
         CustomRoles.Strawdoll,
@@ -1066,6 +1067,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Skinwalker or
                 CustomRoles.Riptide or
                 CustomRoles.Dossun or
+                CustomRoles.Rampager or
                 CustomRoles.Crosswind or
                 CustomRoles.Shuffler or
                 CustomRoles.Chainbinder or
@@ -1399,6 +1401,7 @@ internal static class CustomRolesHelper
                              or CustomRoles.Overheat
                              or CustomRoles.Warlock
                              or CustomRoles.Swiftclaw
+                             or CustomRoles.Rampager
                              or CustomRoles.Undertaker
                              or CustomRoles.Abyssbringer
                              or CustomRoles.Ambusher
@@ -1601,6 +1604,7 @@ internal static class CustomRolesHelper
                 CustomRoles.Replay => RoleOptionType.Impostor_Killing,
                 CustomRoles.Riptide => RoleOptionType.Impostor_Killing,
                 CustomRoles.Dossun => RoleOptionType.Impostor_Killing,
+                CustomRoles.Rampager => RoleOptionType.Impostor_Killing,
                 CustomRoles.Autoscopy => RoleOptionType.Impostor_Killing,
                 CustomRoles.Atlas => RoleOptionType.Impostor_Killing,
                 CustomRoles.Wiper => RoleOptionType.Impostor_Killing,

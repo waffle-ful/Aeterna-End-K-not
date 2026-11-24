@@ -301,6 +301,7 @@ internal static class EkrRoleCatalog
         ["Puppeteer"] = "impostor",
         ["QuickKiller"] = "impostor",
         ["QuickShooter"] = "impostor",
+        ["Rampager"] = "impostor",
         ["Renegade"] = "impostor",
         ["Replay"] = "impostor",
         ["RiftMaker"] = "impostor",

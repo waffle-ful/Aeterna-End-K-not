@@ -653,6 +653,9 @@ public enum CustomRoles
     Furry,
     Emptiness,
 
+    // Impostor (appended)
+    Rampager,
+
     // Sub-role after 1000 (buffer reserved for ~500 future main roles)
     NotAssigned = 1000,
     Absorber,

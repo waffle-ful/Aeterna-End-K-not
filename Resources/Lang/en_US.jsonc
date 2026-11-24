@@ -3331,6 +3331,21 @@
   "Dossun.Recalled": "Block recalled.",
   "Dossun.Expired": "The block timed out and vanished.",
 
+  /* --- Rampager --- */
+  "Rampager": "Rampager",
+  "RampagerInfo": "Go on a rampage and kill fast, but everyone sees who you are",
+  "RampagerInfoLong": "(<#ff1919>Impostors</color>):\n<size=80%>Press the pet button (the Vanish button when Phantom basis is on) to go on a rampage for a set time. While rampaging, you take the shape of the Hide and Seek Seeker (masked body) and everyone can see it is you, but your kill cooldown is short, you move faster, and your vision is wider.\nThe rampage ends when the time runs out, a meeting starts, or you press the button again (if Calm Down is on).\nIf you kill the set number of players in one rampage, you fall into a frenzy and can kill your fellow Impostors too until the rampage ends.\nWhen the masked body is put on, every screen goes dark for about 3 seconds (only the area right around you stays visible) and no one can move.\nPlayers who can kill on their own screen (such as the Sheriff) do not see the mask.</size>",
+  "Rampager.RampageKillCooldown": "Kill Cooldown While Rampaging",
+  "Rampager.RampageSpeed": "Speed While Rampaging",
+  "Rampager.RampageVision": "Vision While Rampaging",
+  "Rampager.CanCalmDown": "Can Calm Down",
+  "Rampager.KillsForTrance": "Kills Until Frenzy (0 = never)",
+  "RampagerButtonText": "Rampage",
+  "RampagerRemaining": "<#ff3030>Rampage: {0}s</color>",
+  "RampagerChill": "...you shiver",
+  "RampagerTransform": "Rampage...",
+  "RampagerTrance": "<#ff3030>Frenzy</color>",
+
   "Wildling": "Wildling",
   "WildlingInfo": "Killing gives you a temporary shield",
   "WildlingInfoLong": "(<#ff1919>Impostors</color>):\n<size=80%>Killing temporarily makes you immune to attacks.\n_____________________________________\nDifficulty: ★★☆☆☆\n\n[Skills]\n・<b><color=#ff1919>Kill Shield</color></b>\nYou can shapeshift but cannot vent. After each kill, you are temporarily immune to being killed.\n\n<i>The hunter becomes untouchable.</i></size>",
