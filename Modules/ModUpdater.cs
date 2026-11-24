@@ -277,8 +277,30 @@ public static class ModUpdater
         ShowPopup(GetString("updatePleaseWait"), StringNames.Cancel, true, false);
         // GitHub のリリースは配布 zip 一式 (Doorstop・BepInEx 本体・ランタイム・patcher・設定) を適用する。
         // 目録の無い旧形式の zip と、入れ替えに入る前の失敗だけ DLL 単体の差し替えに落ちる
-        if (!github) _ = DownloadDLL(url);
-        else EndKnot.Modules.PackageSync.StartUpdate(url, () => _ = DownloadDLLGithub(url));
+        if (!github) PollDownload(DownloadDLL(url), 0);
+        else EndKnot.Modules.PackageSync.StartUpdate(url, () => PollDownload(DownloadDLLGithub(url), 0));
+    }
+
+    // ダウンロードの await の続きは主スレッドに戻らない。ポップアップ・翻訳・ログは本編の物を触るので
+    // (il2cpp に登録されていないスレッドで触ると、GC が走った時にゲームが落ちる)、終わりを主スレッドの LateTask で拾って出す
+    private static void PollDownload(Task<string> task, int tries)
+    {
+        if (!task.IsCompleted)
+        {
+            LateTask.New(() => PollDownload(task, tries + 1), 0.25f, "ModUpdater.PollDownload", log: false);
+            return;
+        }
+
+        string error = task.IsCompletedSuccessfully ? task.Result : task.Exception?.GetBaseException().ToString() ?? "faulted";
+
+        if (error != null)
+        {
+            Logger.Error($"Update failed\n{error}", "DownloadDLL", false);
+            ShowPopup(GetString("updateManually"), StringNames.Close, true);
+            return;
+        }
+
+        ShowPopup(GetString("updateRestart"), StringNames.Close, true);
     }
 
     public static bool NewVersionCheck()
@@ -325,7 +347,8 @@ public static class ModUpdater
         }
     }
 
-    public static async Task<bool> DownloadDLL(string url)
+    // 裏で動く (管理コードだけ)。成功なら null、失敗なら理由を返す
+    private static async Task<string> DownloadDLL(string url)
     {
         try
         {
@@ -350,19 +373,17 @@ public static class ModUpdater
             string fileName = Assembly.GetExecutingAssembly().Location;
             File.Move(fileName, fileName + ".bak");
             File.Move(savePath, fileName);
-            ShowPopup(GetString("updateRestart"), StringNames.Close, true);
         }
         catch (Exception ex)
         {
-            Logger.Error($"Update failed\n{ex}", "DownloadDLL", false);
-            ShowPopup(GetString("updateManually"), StringNames.Close, true);
-            return false;
+            return ex.ToString();
         }
 
-        return true;
+        return null;
     }
 
-    public static async Task<bool> DownloadDLLGithub(string url)
+    // 裏で動く (管理コードだけ)。成功なら null、失敗なら理由を返す
+    private static async Task<string> DownloadDLLGithub(string url)
     {
         try
         {
@@ -402,16 +423,13 @@ public static class ModUpdater
             string fileName = Assembly.GetExecutingAssembly().Location;
             File.Move(fileName, fileName + ".bak");
             File.Move(savePath, fileName);
-            ShowPopup(GetString("updateRestart"), StringNames.Close, true);
         }
         catch (Exception ex)
         {
-            Logger.Error($"Update failed\n{ex}", "DownloadDLL", false);
-            ShowPopup(GetString("updateManually"), StringNames.Close, true);
-            return false;
+            return ex.ToString();
         }
 
-        return true;
+        return null;
     }
 
     public static void ShowPopup(string message, StringNames buttonText, bool showButton = false, bool buttonIsExit = true)
