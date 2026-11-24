@@ -1691,6 +1691,13 @@ internal static class RPC
 
     public static void ForceEndGame(CustomWinner win)
     {
+        // 鬼の体の差し替えの窓の間は GameManager が無いので、窓が明けてから終える
+        if (AmongUsClient.Instance.AmHost && SeekerBody.InWindow)
+        {
+            LateTask.New(() => ForceEndGame(win), 0.5f, "SeekerBody hold end", log: false);
+            return;
+        }
+
         if (ShipStatus.Instance == null) return;
 
         try { CustomWinnerHolder.ResetAndSetWinner(win); }

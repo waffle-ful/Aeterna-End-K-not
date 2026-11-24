@@ -5993,6 +5993,8 @@ public static class Utils
     // public: Akazukin がホストローカルの死体生成にだけ使う (客側はバニラの MurderPlayer が作るので RPC 不要)
     public static DeadBody CreateDeadBody(Vector3 position, byte colorId, PlayerControl deadBodyParent)
     {
+        // 鬼の体の差し替えの窓の間は GameManager が無い
+        if (!GameManager.Instance) return null;
         int baseColorId = deadBodyParent.Data.DefaultOutfit.ColorId;
         deadBodyParent.Data.DefaultOutfit.ColorId = colorId;
         DeadBody deadBody = Object.Instantiate(GameManager.Instance.deadBodyPrefab[0]);
@@ -6048,7 +6050,7 @@ public static class Utils
             if (hostLocalBody)
             {
                 DeadBody hostBody = CreateDeadBody(position, colorId, deadBodyParent);
-                onCreated?.Invoke(hostBody);
+                if (hostBody) onCreated?.Invoke(hostBody);
             }
 
             PlayerControl playerControl = Object.Instantiate(AmongUsClient.Instance.PlayerPrefab, Vector2.zero, Quaternion.identity);

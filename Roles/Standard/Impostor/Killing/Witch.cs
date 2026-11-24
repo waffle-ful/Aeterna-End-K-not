@@ -141,7 +141,7 @@ public class Witch : RoleBase
     {
         if (NowSwitchTrigger == SwitchTrigger.Vanish)
         {
-            var killRange = GameManager.Instance.LogicOptions.GetKillDistance() + 1f;
+            var killRange = (GameManager.Instance ? GameManager.Instance.LogicOptions.GetKillDistance() : 0f) + 1f;
             if (!FastVector2.TryGetClosestPlayerInRangeTo(pc, killRange, out PlayerControl target, x => !x.IsImpostor())) return false;
             SetSpelled(pc, target);
         }

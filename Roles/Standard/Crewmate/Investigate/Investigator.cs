@@ -128,7 +128,7 @@ public class Investigator : RoleBase
                 }
                 else
                 {
-                    float range = GameManager.Instance.LogicOptions.GetKillDistance();
+                    float range = (GameManager.Instance ? GameManager.Instance.LogicOptions.GetKillDistance() : 0f);
                     
                     if (FastVector2.DistanceWithinRange(player.Pos(), arTarget.Pos(), range))
                         InvestigatorTimer[player.PlayerId] = (arTarget, arTime + Time.fixedDeltaTime);

@@ -2551,6 +2551,18 @@ internal static class ExtendedPlayerControl
             if (!GameStates.InGame || GameStates.IsLobby) return;
             if (Options.DisableMeeting.GetBool() && !force) return;
 
+            // 鬼の体を外した SetRole が落ち着くまでは会議を開かない (本編の客は SetRole の直後の会議で画面が壊れる)
+            if (SeekerBody.HoldReport())
+            {
+                PlayerControl reporter = player;
+                LateTask.New(() =>
+                {
+                    if (GameStates.IsMeeting || ReportDeadBodyPatch.MeetingStarted || !reporter) return;
+                    reporter.NoCheckStartMeeting(target, force, synthetic);
+                }, 0.5f, "SeekerBody hold meeting", log: false);
+                return;
+            }
+
             ReportDeadBodyPatch.AfterReportTasks(player, target, synthetic);
             MeetingRoomManager.Instance.AssignSelf(player, target);
             HudManager.Instance.OpenMeetingRoom(player);
