@@ -385,7 +385,7 @@ End K not is a derivative of [Endless Host Roles](https://github.com/Gurge44/End
 - **[TownOfHost-Shell](https://github.com/sijimi2222/TownOfHost-Shell)** (TORAKUNNOIE, GPL-3.0): source of the Nova role
 - **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions repo](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion): split RPC packs, meeting screen handling
 - **[TownOfHost-hamo](https://github.com/rar006/TownOfHost-hamo)** (rar006, GPL-3.0): coming-out feature (`/co`, `/aco`, `/colist`)
-- **[TownOfHost_L](https://github.com/haru03741-glitch/TownOfHost_L)** (haru03741-glitch, GPL-3.0): the new settings menu, switchable in client options (from More Roles Plus)
+- **[TownOfHost_L](https://github.com/haru03741-glitch/TownOfHost_L)** (haru03741-glitch, GPL-3.0): the new settings menu, switchable in client options (from More Roles Plus); showing the Hide and Seek seeker body to vanilla clients during a normal-mode game (used by the Rampager), and showing the Hide and Seek flashlight the same way. Both techniques were first developed in TownOfHost_L
 - **TownOfHost-Kemo**: the idea behind the roles Light, Shadow, Kemono and Furry
 - **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper): a Town Of Host derivative adding its own roles
 - **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975): zoom

@@ -389,7 +389,7 @@ End K not は [Endless Host Roles](https://github.com/Gurge44/EndlessHostRoles) 
 - **[TownOfHost-Shell](https://github.com/sijimi2222/TownOfHost-Shell)** (TORAKUNNOIE、GPL-3.0) — 役職「ノヴァ」の移植元
 - **[TownOfHost-TheOtherRoles](https://github.com/music-discussion/TownOfHost-TheOtherRoles)** / [discus-sions 版](https://github.com/discus-sions/TownOfHost-TheOtherRoles) (music-discussion) — RPC パケットの分割送信、会議画面まわりの処理
 - **[TownOfHost-hamo](https://github.com/rar006/TownOfHost-hamo)** (rar006、GPL-3.0) — カミングアウト機能 (`/co` `/aco` `/colist`)
-- **[TownOfHost_L](https://github.com/haru03741-glitch/TownOfHost_L)** (haru03741-glitch、GPL-3.0) — 新しい設定メニュー（クライアント設定で切り替え。More Roles Plus 由来）
+- **[TownOfHost_L](https://github.com/haru03741-glitch/TownOfHost_L)** (haru03741-glitch、GPL-3.0) — 新しい設定メニュー（クライアント設定で切り替え。More Roles Plus 由来）、通常モードの試合で本編の客にかくれんぼの鬼の体を出す仕組み（暴走鬼で使用）と、かくれんぼの懐中電灯を出す仕組み。どちらも TownOfHost_L で生まれた技術
 - **TownOfHost-Kemo** — 役職「光」「影」「ケモノ」「ファーリー」のアイデア
 - **[TownOfHostPlus](https://github.com/SkullCreeper/TownOfHostPlus)** (SkullCreeper) — Town Of Host に独自役職を追加した Mod
 - **[TownOfPlus](https://github.com/tugaru1975/TownOfPlus)** (tugaru1975) — ズーム
