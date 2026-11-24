@@ -423,6 +423,7 @@ internal static class ChangeRoleSettings
             Camouflage.Init();
             SeekerBody.Init();
             SeerCamouflage.Init();
+            Flashlight.Init();
             
             RoleResult = [];
 

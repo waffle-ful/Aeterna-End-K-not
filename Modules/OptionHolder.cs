@@ -509,6 +509,8 @@ public static class Options
     public static OptionItem BaitDelayNotify;
     public static OptionItem TorchVision;
     public static OptionItem TorchAffectedByLights;
+    public static OptionItem TorchFlashlight;
+    public static OptionItem TorchFlashlightSize;
     public static OptionItem PacifistCooldown;
     public static OptionItem PacifistMaxOfUsage;
     public static OptionItem killAttacker;
@@ -774,6 +776,9 @@ public static class Options
     public static OptionItem DisablePlayerVotedMessage;
 
     public static OptionItem LadderDeath;
+    public static OptionItem FlashlightMode;
+    public static OptionItem FlashlightCrewSize;
+    public static OptionItem FlashlightImpostorSize;
     public static OptionItem LadderDeathChance;
 
     public static OptionItem EnableAttackDefenseLevels;
@@ -3484,6 +3489,21 @@ public static class Options
 
         LadderDeathChance = new StringOptionItem(23810, "LadderDeathChance", Rates[1..], 0, TabGroup.GameSettings)
             .SetParent(LadderDeath);
+
+        // 懐中電灯モード: 全員の視界を本編のかくれんぼの懐中電灯にする (Modules/Flashlight)
+        FlashlightMode = new BooleanOptionItem(23830, "FlashlightMode", false, TabGroup.GameSettings)
+            .SetGameMode(CustomGameMode.Standard)
+            .SetColor(new Color32(255, 236, 128, byte.MaxValue));
+
+        FlashlightCrewSize = new FloatOptionItem(23831, "FlashlightCrewSize", new(0.1f, 1.5f, 0.05f), 0.35f, TabGroup.GameSettings)
+            .SetGameMode(CustomGameMode.Standard)
+            .SetParent(FlashlightMode)
+            .SetValueFormat(OptionFormat.Multiplier);
+
+        FlashlightImpostorSize = new FloatOptionItem(23832, "FlashlightImpostorSize", new(0.1f, 1.5f, 0.05f), 0.5f, TabGroup.GameSettings)
+            .SetGameMode(CustomGameMode.Standard)
+            .SetParent(FlashlightMode)
+            .SetValueFormat(OptionFormat.Multiplier);
 
         EightballCommandIndexes = new IntegerOptionItem(23820, "EightballCommandIndexes", new(1, 100, 1), 20, TabGroup.GameSettings)
             .SetColor(new Color32(255, 153, 153, byte.MaxValue));

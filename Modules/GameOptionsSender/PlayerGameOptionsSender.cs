@@ -27,7 +27,8 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
     // SkipTasks 中に捨てられるのは下の SendOptionsArray を通る「他クライアントへの送信」だけ。
     // AmOwner (ホスト自身) の枝は SendGameOptionsAsync でローカル適用するだけで送信しないため、
     // 窓中も従来どおり走らせる (ここまで止めるとホスト自身の設定反映が2秒遅れる)。
-    protected override bool SendSuppressed => (AntiBlackout.SkipTasks && !player.AmOwner) || SeekerBody.InWindow;
+    // 懐中電灯の点け直しの間は、送ったかくれんぼ型の設定を上書きしない (終わりに Flashlight が送り直す)
+    protected override bool SendSuppressed => (AntiBlackout.SkipTasks && !player.AmOwner) || SeekerBody.InWindow || (player != null && Flashlight.SuppressesSend(player.PlayerId));
 
     public static void SetDirty(byte playerId)
     {
@@ -328,6 +329,59 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
             PackedWriter.EndMessage();
         }
         PackedWriter.EndMessage();
+    }
+
+    /// <summary>
+    /// 組み立てた設定を、この人にだけ送る数の制限の列に並べて送る (Flashlight)。
+    /// shouldSend が false を返したら送らない。送れたら onSent を呼ぶ
+    /// </summary>
+    public void SendOptionsQueued(IGameOptions opt, Func<bool> shouldSend, Action onSent)
+    {
+        if (player == null || player.AmOwner || opt == null) return;
+        Il2CppStructArray<byte> array = SerializeOptions(SanitizeForOfficialServer(opt));
+
+        DataFlagRateLimiter.Enqueue(() =>
+        {
+            if (shouldSend != null && !shouldSend()) return;
+            if (WriteOptionsTo(array)) onSent?.Invoke();
+        });
+    }
+
+    /// <summary>組み立てた設定を、この人にだけ列を通さずすぐ送る (会議の直前の Flashlight の戻し)</summary>
+    public void SendOptionsNow(IGameOptions opt)
+    {
+        if (player == null || player.AmOwner || opt == null) return;
+        WriteOptionsTo(SerializeOptions(SanitizeForOfficialServer(opt)));
+    }
+
+    private bool WriteOptionsTo(Il2CppStructArray<byte> optionArray)
+    {
+        GameManager gm = GameManager.Instance;
+        if (gm == null || gm.LogicComponents == null || player == null || player.OwnerId < 0 || !AmongUsClient.Instance) return false;
+        LogicOptions logicOptions = gm.LogicOptions;
+        if (logicOptions == null) return false;
+        int index = gm.LogicComponents.IndexOf(logicOptions);
+        if (index < 0) return false;
+
+        MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
+
+        try
+        {
+            writer.StartMessage(6);
+            writer.Write(AmongUsClient.Instance.GameId);
+            writer.WritePacked(player.OwnerId);
+            writer.StartMessage(1);
+            writer.WritePacked(gm.NetId);
+            writer.StartMessage((byte)index);
+            writer.WriteBytesAndSize(optionArray);
+            writer.EndMessage();
+            writer.EndMessage();
+            writer.EndMessage();
+            AmongUsClient.Instance.SendOrDisconnect(writer);
+        }
+        finally { writer.Recycle(); }
+
+        return true;
     }
 
     public static void RemoveSender(PlayerControl player)
@@ -873,6 +927,9 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
                 opt.SetInt(Int32OptionNames.EmergencyCooldown, 3600);
 
             MeetingTimeManager.ApplyGameOptions(opt);
+
+            // 視界の値が決まった後 (暗転・鬼の体の暗さより後) に、懐中電灯の半径のずれを足す
+            Flashlight.ApplyGameOptions(player, opt);
 
             // 木槌ボタンを配ったプレイヤーはタスクゲート (JudgeRole.IsBlockedByTasks) を外す
             if (MeetingTargetPicker.IsHolder(player.PlayerId))

@@ -155,6 +155,8 @@ public static class SeekerBody
     public static bool HoldReport()
     {
         if (!AmongUsClient.Instance.AmHost) return false;
+        // かくれんぼ型の設定のまま会議に入ると客の会議の画面が壊れるので、懐中電灯の点け直しを先に終える
+        Flashlight.BeforeMeeting();
         if (masked.Count > 0)
         {
             applyAt.Clear();
@@ -189,6 +191,8 @@ public static class SeekerBody
         if (!GameStates.IsInTask || GameStates.IsMeeting || MeetingHud.Instance || ExileController.Instance) return false;
         if (!Main.IntroDestroyed || !GameManager.Instance || !ShipStatus.Instance) return false;
         if (AntiBlackout.SkipTasks || ReportDeadBodyPatch.MeetingStarted) return false;
+        // 懐中電灯の点け直しの最中に GameManager を出し直すと、かくれんぼ型の設定を戻せなくなる
+        if (Flashlight.AnyHolding) return false;
         if (GameEndChecker.Ended || GameStates.IsEnded || AmongUsClient.Instance.IsGameOver) return false;
         if (Options.CurrentGameMode != CustomGameMode.Standard) return false;
         return GameOptionsManager.Instance.currentGameMode == GameModes.Normal;
@@ -290,6 +294,8 @@ public static class SeekerBody
         // 暗転を明ける。出し直した GameManager は全員に同じ設定を配ったので、人ごとの設定を送り直す
         dimmed.Clear();
         Utils.MarkEveryoneDirtySettings();
+        // 出し直した GameManager の設定には懐中電灯が無いので、点け直す
+        Flashlight.RequestAll();
         BeginSettling();
         foreach (var id in sending)
         {

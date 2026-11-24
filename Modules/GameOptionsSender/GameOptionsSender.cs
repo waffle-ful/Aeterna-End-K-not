@@ -23,9 +23,11 @@ public abstract class GameOptionsSender
     /// </summary>
     protected virtual bool SendSuppressed => SeekerBody.InWindow;
 
-    private Il2CppStructArray<byte> BuildOptionArray()
+    private Il2CppStructArray<byte> BuildOptionArray() => SerializeOptions(BuildSendableGameOptions());
+
+    /// <summary>設定を、GameManager の LogicOptions へ送る中身 (バイト列) にする</summary>
+    protected static Il2CppStructArray<byte> SerializeOptions(IGameOptions opt)
     {
-        IGameOptions opt = BuildSendableGameOptions();
         var currentGameMode = AprilFoolsMode.IsAprilFoolsModeToggledOn ? opt.AprilFoolsOnMode : opt.GameMode;
 
         // option => byte[]
@@ -39,7 +41,7 @@ public abstract class GameOptionsSender
         else if (opt.TryCast(out HideNSeekGameOptionsV12 hnsOpt))
             HideNSeekGameOptionsV12.Serialize(writer, hnsOpt);
         else
-            Logger.Error("Option cast failed", ToString());
+            Logger.Error("Option cast failed", nameof(GameOptionsSender));
 
         writer.EndMessage();
 
