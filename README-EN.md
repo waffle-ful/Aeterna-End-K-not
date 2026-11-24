@@ -122,9 +122,11 @@ Supported Among Us version: **2026.8.18**
 
 ## Features
 
-### 👹 A Hide and Seek Seeker in a normal game
+### 👹 The Hide and Seek Seeker and flashlight in a normal game
 
-- **The Rampager role**: in the middle of a normal-mode game, an Impostor turns into the Hide and Seek Seeker (the masked body). Players without the mod see the Seeker too. As far as we know, no host-only mod has brought the Hide and Seek Seeker into a normal game before.
+- **The Rampager role**: in the middle of a normal-mode game, an Impostor turns into the Hide and Seek Seeker (the masked body). Players without the mod see the Seeker too.
+- **Flashlight Mode and the Torch flashlight**: in a normal-mode game, vision becomes the Hide and Seek flashlight (a beam in the direction you face and a small light around you). Give it to everyone, or only to players with the Torch add-on. This also works for players without the mod.
+- As far as we know, no host-only mod has brought the Hide and Seek Seeker or flashlight into a normal game before.
 
 ### 🎥 Streaming & long-running hosting
 
