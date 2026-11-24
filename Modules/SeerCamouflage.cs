@@ -10,15 +10,15 @@ namespace EndKnot.Modules;
 /// 本編の客は、プレイヤーのデータ (NetworkedPlayerInfo) を受けても見た目を描き直さない。描き直すのは変身の電文を受けた時。
 /// そこで見る人の客にだけ、宛先指定 (tag6) で「見た目を替えたデータ + 自分への変身 (演出なし)」を送る。
 /// データはホストの手元の物を一時的に替えて書き出し、すぐ元へ戻す (ホストの手元と他の客には何も変わらない)。
-/// 名前は名前の組み立て (NotifyRoles) で隠す。ホストが見る人の時は、手元で見た目だけ描き替える。
+/// 名前は名前の組み立て (NotifyRoles) で隠し、着せ直しの後に送り直す (着せ直しを受けた客は名前を外見の名前に戻す)。ホストが見る人の時は、手元で見た目だけ描き替える。
 ///
 /// 限り: 本物の変身・会議・他の見た目の変更が見る人の客で描き直されると、その人だけ元の見た目に戻る。
 /// 使う側は会議の前に <see cref="End"/> を呼び、キルの後など要所で <see cref="Refresh"/> を呼ぶ。
 /// </summary>
 public static class SeerCamouflage
 {
-    // 1 回の送りに詰める大きさの上限 (公式鯖の 1 メッセージの上限より十分小さく)
-    private const int ChunkLimit = 800;
+    // 1 回の送りに詰める人数 (1 人はデータと変身の電文で 150 バイトほど。公式鯖の 1 メッセージの上限より十分小さく)
+    private const int PerChunk = 5;
     // 同じ見る人へ続けて送る時の間 (同じ宛先へ同種の電文を短い間に重ねない)
     private const float ChunkGap = 0.25f;
 
@@ -68,8 +68,7 @@ public static class SeerCamouflage
         int gen = Generation.GetValueOrDefault(seer.PlayerId) + 1;
         Generation[seer.PlayerId] = gen;
 
-        // 窓の間は GameManager が無いか、かくれんぼの物なので送らない
-        if (SeekerBody.InWindow)
+        if (!CanSend())
         {
             Pending[seer.PlayerId] = disguise;
             return;
@@ -81,7 +80,7 @@ public static class SeerCamouflage
 
     private static void FlushPending()
     {
-        if (Pending.Count == 0 || SeekerBody.InWindow || !AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return;
+        if (Pending.Count == 0 || !CanSend() || !AmongUsClient.Instance || !AmongUsClient.Instance.AmHost) return;
 
         foreach ((byte seerId, bool disguise) in new List<KeyValuePair<byte, bool>>(Pending))
         {
@@ -106,65 +105,79 @@ public static class SeerCamouflage
         }
 
         if (seer.OwnerId < 0 || seer.Data == null || seer.Data.Disconnected) return;
-        var chunks = new List<MessageWriter>();
-        MessageWriter current = null;
+        var groups = new List<List<byte>>();
 
         foreach (PlayerControl target in Main.AllPlayerControls)
         {
             if (target.PlayerId == seer.PlayerId || target.Data == null || target.Data.Disconnected) continue;
             // 死んだ人は見る人の画面に出ない。戻す時だけデータを書き戻す (忘我の間に死んだ人の分)
             if (disguise && !target.IsAlive()) continue;
-            // 本人に死を隠している人のデータは送らない (データには死んだかどうかも入る)
-            if (EndKnot.Roles.Akazukin.IsDeathConcealed(target.PlayerId)) continue;
-
-            if (current == null)
-            {
-                current = MessageWriter.Get(SendOption.Reliable);
-                current.StartMessage(6);
-                current.Write(AmongUsClient.Instance.GameId);
-                current.WritePacked(seer.OwnerId);
-            }
-
-            WriteTarget(current, target, disguise);
-
-            if (current.Length >= ChunkLimit)
-            {
-                current.EndMessage();
-                chunks.Add(current);
-                current = null;
-            }
+            if (groups.Count == 0 || groups[^1].Count >= PerChunk) groups.Add([]);
+            groups[^1].Add(target.PlayerId);
         }
 
-        if (current != null)
-        {
-            current.EndMessage();
-            chunks.Add(current);
-        }
+        byte seerId = seer.PlayerId;
 
-        for (var i = 0; i < chunks.Count; i++)
+        for (var i = 0; i < groups.Count; i++)
         {
-            MessageWriter chunk = chunks[i];
-            byte seerId = seer.PlayerId;
+            List<byte> targets = groups[i];
+            bool last = i == groups.Count - 1;
 
             void SendChunk()
             {
-                if (Generation.GetValueOrDefault(seerId) != gen)
-                {
-                    chunk.Recycle();
-                    return;
-                }
+                if (Generation.GetValueOrDefault(seerId) != gen) return;
 
+                // データは送る時に書き出す (遅れて送る間に死んだ・タスクが進んだ人の古い値を送らない)
                 DataFlagRateLimiter.Enqueue(() =>
                 {
-                    AmongUsClient.Instance.SendOrDisconnect(chunk);
-                    chunk.Recycle();
-                }, cleanup: chunk.Recycle);
+                    if (Generation.GetValueOrDefault(seerId) != gen || !GameStates.InGame) return;
+                    PlayerControl seerPc = Utils.GetPlayerById(seerId);
+                    if (seerPc == null || seerPc.OwnerId < 0 || seerPc.Data == null || seerPc.Data.Disconnected) return;
+
+                    if (!CanSend())
+                    {
+                        // 送れない間は、送れるようになってから全員分を送り直す
+                        Pending[seerId] = disguise;
+                        return;
+                    }
+
+                    MessageWriter writer = MessageWriter.Get(SendOption.Reliable);
+
+                    try
+                    {
+                        writer.StartMessage(6);
+                        writer.Write(AmongUsClient.Instance.GameId);
+                        writer.WritePacked(seerPc.OwnerId);
+                        var written = 0;
+
+                        foreach (byte id in targets)
+                        {
+                            PlayerControl target = Utils.GetPlayerById(id);
+                            if (target == null || target.Data == null || target.Data.Disconnected) continue;
+                            if (disguise && !target.IsAlive()) continue;
+                            // 本人に死を隠している人のデータは送らない (データには死んだかどうかも入る)
+                            if (EndKnot.Roles.Akazukin.IsDeathConcealed(id)) continue;
+                            WriteTarget(writer, target, disguise);
+                            written++;
+                        }
+
+                        writer.EndMessage();
+                        if (written > 0) AmongUsClient.Instance.SendOrDisconnect(writer);
+                    }
+                    finally { writer.Recycle(); }
+
+                    // 着せ直しを受けた客は名前を外見の名前に戻すので、最後の塊を送った後に見る人ごとの名前を送り直す
+                    if (last) Utils.NotifyRoles(SpecifySeer: seerPc, NoCache: true);
+                });
             }
 
             if (i == 0) SendChunk();
             else LateTask.New(SendChunk, ChunkGap * i, log: false);
         }
     }
+
+    // 鬼の体の差し替えの窓の間は GameManager が無いか、かくれんぼの物。暗転対策の間は死んだかどうかが偽りの値
+    private static bool CanSend() => !SeekerBody.InWindow && !AntiBlackout.SkipTasks;
 
     // target のデータ (見た目を替えた物か今の物) と、描き直しのための変身の電文を書く
     private static void WriteTarget(MessageWriter writer, PlayerControl target, bool disguise)
@@ -186,10 +199,13 @@ public static class SeerCamouflage
         writer.StartMessage(1);
         writer.WritePacked(data.NetId);
         NetworkedPlayerInfoSerializePatch.IntentionalSends++;
+        // 宛先 1 人への書き出しで dirty を消すと、同じ時に他の客へ配るはずの更新 (タスクなど) が届かなくなる
+        uint dirty = data.DirtyBits;
 
         try { data.Serialize(writer, false); }
         finally
         {
+            data.DirtyBits = dirty;
             NetworkedPlayerInfoSerializePatch.IntentionalSends--;
 
             if (saved != null)
