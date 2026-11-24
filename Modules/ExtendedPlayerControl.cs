@@ -2178,7 +2178,7 @@ internal static class ExtendedPlayerControl
         public float GetKillDistance()
         {
             // 魔の手の距離設定 (0=短い・1=普通・2=長い) は本編のキル距離の段階と同じ
-            return player.Is(CustomRoles.MagicHand) ? MagicHand.KillDistance.GetInt() switch { 0 => 1f, 1 => 1.8f, _ => 2.5f } : GameManager.Instance.LogicOptions.GetKillDistance();
+            return player.Is(CustomRoles.MagicHand) ? MagicHand.KillDistance.GetInt() switch { 0 => 1f, 1 => 1.8f, _ => 2.5f } : GameManager.Instance ? GameManager.Instance.LogicOptions.GetKillDistance() : 0f; // 鬼の体の差し替えの窓の間は GameManager が無い (キルも止めている)
         }
 
         public bool IsShifted()
