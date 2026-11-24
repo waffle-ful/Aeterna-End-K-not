@@ -610,7 +610,7 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
                             case CustomRoles.Lovers when Lovers.GetPair(Lovers.PairIndexOf(player.PlayerId)).Count(x => x.IsAlive()) == 1 && Lovers.LoverDieConsequence.GetValue() == 2:
                             {
                                 opt.SetFloat(FloatOptionNames.CrewLightMod, Main.DefaultCrewmateVision / 2f);
-                                opt.SetFloat(FloatOptionNames.ImpostorFlashlightSize, Main.DefaultImpostorVision / 2f);
+                                opt.SetFloat(FloatOptionNames.ImpostorLightMod, Main.DefaultImpostorVision / 2f);
                                 break;
                             }
                             case CustomRoles.Nimble when roleTypes == RoleTypes.Engineer:
