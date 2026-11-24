@@ -1,5 +1,6 @@
 ﻿using System;
 using AmongUs.GameOptions;
+using EndKnot.Modules;
 using EndKnot.Roles;
 using HarmonyLib;
 using Hazel;
@@ -72,6 +73,9 @@ public static class PhantomRolePatch
                 phantom.RpcResetAbilityCooldown();
                 return false;
             }
+
+            // 鬼の体を付けている人へ SetRole を送ると体が外れ、GameManager の差し替え中は窓の中へ入る
+            if (SeekerBody.KeepsRoleFor(phantom)) return false;
 
             var sender = CustomRpcSender.Create($"Cancel vanish for {phantom.GetRealName()}", SendOption.Reliable);
             sender.StartMessage(phantom.OwnerId);

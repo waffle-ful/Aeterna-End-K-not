@@ -68,7 +68,7 @@ internal static class GameEndChecker
     }
     public static void CheckCustomEndCriteria()
     {
-        if (Predicate == null || ShouldNotCheck || !AmongUsClient.Instance.AmHost || Main.HasJustStarted) return;
+        if (Predicate == null || ShouldNotCheck || !AmongUsClient.Instance.AmHost || Main.HasJustStarted || SeekerBody.InWindow) return;
         if (Options.NoGameEnd.GetBool() && WinnerTeam is not CustomWinner.Draw and not CustomWinner.Error) return;
         
         var now = TimeStamp;

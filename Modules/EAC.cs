@@ -6,6 +6,7 @@ using System.Linq;
 using AmongUs.GameOptions;
 using AmongUs.QuickChat;
 using BepInEx.Unity.IL2CPP.Utils.Collections;
+using EndKnot.Modules;
 using HarmonyLib;
 using Hazel;
 using InnerNet;
@@ -128,7 +129,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if (GameManager.Instance.TryCast<HideAndSeekManager>())
+                    if (!SeekerBody.InWindow && GameManager.Instance.TryCast<HideAndSeekManager>())
                     {
                         WarnHost();
                         Report(pc, "Try to Report body in Hide and Seek");
@@ -465,7 +466,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if (!GameManager.Instance.LogicOptions.GetVisualTasks())
+                    if (!SeekerBody.InWindow && !GameManager.Instance.LogicOptions.GetVisualTasks())
                     {
                         WarnHost();
                         Report(pc, "PlayAnimation Rpc with visuals off");
@@ -508,7 +509,7 @@ internal static class EAC
                 }
                 case RpcCalls.SetScanner:
                 {
-                    if (!GameManager.Instance.LogicOptions.GetVisualTasks())
+                    if (!SeekerBody.InWindow && !GameManager.Instance.LogicOptions.GetVisualTasks())
                     {
                         WarnHost();
                         Report(pc, "SetScanner Rpc with visuals off");
@@ -568,7 +569,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if (GameManager.Instance.LogicOptions.MapId != 4 && !SubmergedCompatibility.IsSubmerged())
+                    if (!SeekerBody.InWindow && GameManager.Instance.LogicOptions.MapId != 4 && !SubmergedCompatibility.IsSubmerged())
                     {
                         WarnHost();
                         Report(pc, "Using platform on wrong map");
@@ -578,7 +579,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if (GameManager.Instance.TryCast<HideAndSeekManager>())
+                    if (!SeekerBody.InWindow && GameManager.Instance.TryCast<HideAndSeekManager>())
                     {
                         WarnHost();
                         Report(pc, "Using platform in hide n seek");
@@ -644,7 +645,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if (GameManager.Instance.LogicOptions.MapId < 5)
+                    if (!SeekerBody.InWindow && GameManager.Instance.LogicOptions.MapId < 5)
                     {
                         WarnHost();
                         Report(pc, "Using zipline on wrong map");
@@ -676,7 +677,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if (GameManager.Instance.LogicOptions.MapId < 5)
+                    if (!SeekerBody.InWindow && GameManager.Instance.LogicOptions.MapId < 5)
                     {
                         WarnHost();
                         Report(pc, "Triggering spore on wrong map");
@@ -975,7 +976,7 @@ internal static class EAC
                         return true;
                     }
 
-                    if (GameManager.Instance.LogicOptions.MapId < 4)
+                    if (!SeekerBody.InWindow && GameManager.Instance.LogicOptions.MapId < 4)
                     {
                         WarnHost();
                         Report(player, "Climbing ladder on wrong map");

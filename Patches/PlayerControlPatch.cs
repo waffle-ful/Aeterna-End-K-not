@@ -175,6 +175,12 @@ internal static class CheckMurderPatch
                 return false;
             }
 
+            if (SeekerBody.InWindow)
+            {
+                Logger.Info("CheckMurder while the GameManager is being swapped, kill canceled", "CheckMurder");
+                return false;
+            }
+
             if (killer.Is(CustomRoles.Dizzy))
             {
                 Vector2 pos = killer.Pos();
@@ -1402,6 +1408,8 @@ internal static class ReportDeadBodyPatch
         // CanReport/WaitReport はゲーム開始時に初期化されるため、開始前の一過性ウィンドウや
         // 途中参加者は null/未登録がありうる (NRE/KeyNotFound 源)。未登録は「通報可」として扱う。
         bool canReport = CanReport == null || CanReport.GetValueOrDefault(__instance.PlayerId, true);
+        // 鬼の体を外した SetRole が落ち着くまでは会議を開かない (本編の客は SetRole の直後の会議で画面が壊れる)
+        if (canReport && SeekerBody.HoldReport()) canReport = false;
         if (!canReport || __instance.IsRoleBlocked())
         {
             if (!WaitReport.TryGetValue(__instance.PlayerId, out List<NetworkedPlayerInfo> waitList))
@@ -2064,7 +2072,7 @@ internal static class FixedUpdatePatch
             if (AmHostTick && self && __instance.AmOwner)
                 CustomNetObject.FixedUpdate();
 
-            if (AmHostTick && inTask && ReportDeadBodyPatch.CanReport != null && ReportDeadBodyPatch.CanReport.GetValueOrDefault(id, true) && !id.IsPlayerRoleBlocked() && ReportDeadBodyPatch.WaitReport.TryGetValue(id, out List<NetworkedPlayerInfo> waitReports) && waitReports.Count > 0)
+            if (AmHostTick && inTask && ReportDeadBodyPatch.CanReport != null && ReportDeadBodyPatch.CanReport.GetValueOrDefault(id, true) && !id.IsPlayerRoleBlocked() && !SeekerBody.HoldsReports && ReportDeadBodyPatch.WaitReport.TryGetValue(id, out List<NetworkedPlayerInfo> waitReports) && waitReports.Count > 0)
             {
                 NetworkedPlayerInfo info = waitReports[0];
                 waitReports.Clear();

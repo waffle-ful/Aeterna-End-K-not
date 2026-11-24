@@ -493,6 +493,7 @@ internal static class ExtendedPlayerControl
                 writer.Write((ushort)roleTypes);
                 writer.Write(true);
                 AmongUsClient.Instance.FinishRpcImmediately(writer);
+                SeekerBody.OnRoleSent(player);
                 Logger.Info($" {player.GetNameWithRole()} => {roleTypes}", "RpcSetRoleGlobal");
 
                 if (setRoleMap)
@@ -550,6 +551,7 @@ internal static class ExtendedPlayerControl
             writer.Write((ushort)role);
             writer.Write(true);
             AmongUsClient.Instance.FinishRpcImmediately(writer);
+            SeekerBody.OnRoleSent(player);
         }
 
         public (RoleTypes RoleType, CustomRoles CustomRole) GetRoleMap(byte targetId = byte.MaxValue)
@@ -608,7 +610,7 @@ internal static class ExtendedPlayerControl
             {
                 if (!AmongUsClient.Instance.AmHost || !GameStates.IsInGame || !player || !player.IsAlive()) return;
 
-                if (AntiBlackout.SkipTasks || ExileController.Instance)
+                if (AntiBlackout.SkipTasks || ExileController.Instance || SeekerBody.InWindow)
                 {
                     StackTrace stackTrace = new(1, true);
                     MethodBase callerMethod = stackTrace.GetFrame(0)?.GetMethod();
@@ -620,7 +622,7 @@ internal static class ExtendedPlayerControl
 
                     IEnumerator DelayBasisChange()
                     {
-                        while (AntiBlackout.SkipTasks || ExileController.Instance) yield return null;
+                        while (AntiBlackout.SkipTasks || ExileController.Instance || SeekerBody.InWindow) yield return null;
                         yield return new WaitForSecondsRealtime(1f);
                         Logger.Msg($"Now that the anti-blackout processing or ejection screen showing is complete, the role basis of {player.GetNameWithRole()} will be changed", "RpcChangeRoleBasis");
                         player.RpcChangeRoleBasis(newCustomRole, loggerRoleMap);

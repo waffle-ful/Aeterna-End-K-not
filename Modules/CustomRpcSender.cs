@@ -847,6 +847,7 @@ public static class CustomRpcSenderExtensions
                 .Write((ushort)role)
                 .Write(true)
                 .EndRpc();
+            SeekerBody.OnRoleSent(player);
 
             // Assignment-burst instrumentation (no-op unless RecordSetRoles is on during role assignment).
             if (StartGameHostPatch.RpcSetRoleReplacer.RecordSetRoles)

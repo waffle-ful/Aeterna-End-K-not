@@ -180,8 +180,8 @@ internal static class CanUseVentPatch
         var actualDistance = float.MaxValue;
 
         couldUse =
-            // true for classic and for vanilla HnS
-            GameManager.Instance.LogicUsables.CanUse(usableVent, playerControl) &&
+            // true for classic and for vanilla HnS (the GameManager is briefly absent while SeekerBody swaps it)
+            GameManager.Instance && GameManager.Instance.LogicUsables.CanUse(usableVent, playerControl) &&
             // CanUse(usableVent) && Ignore because the decision is based on custom role, not vanilla role
             // there is no vent task in the target vent, or you are in the target vent now
             (!playerControl.MustCleanVent(__instance.Id) || (playerControl.inVent && Vent.currentVent == __instance)) &&

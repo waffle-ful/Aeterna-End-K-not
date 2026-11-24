@@ -27,7 +27,7 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
     // SkipTasks 中に捨てられるのは下の SendOptionsArray を通る「他クライアントへの送信」だけ。
     // AmOwner (ホスト自身) の枝は SendGameOptionsAsync でローカル適用するだけで送信しないため、
     // 窓中も従来どおり走らせる (ここまで止めるとホスト自身の設定反映が2秒遅れる)。
-    protected override bool SendSuppressed => AntiBlackout.SkipTasks && !player.AmOwner;
+    protected override bool SendSuppressed => (AntiBlackout.SkipTasks && !player.AmOwner) || SeekerBody.InWindow;
 
     public static void SetDirty(byte playerId)
     {
@@ -809,6 +809,13 @@ public sealed class PlayerGameOptionsSender(PlayerControl player) : GameOptionsS
                 AURoleOptions.PhantomDuration = 0.1f;
 
             // ===================================================================================================================
+
+            // 鬼の体の差し替えで止まる間は、全員の視界を自分の周りだけまで狭める (元の視界によらず同じ半径)
+            if (SeekerBody.IsDimmed(player.PlayerId) && !state.IsBlackOut)
+            {
+                opt.SetFloat(FloatOptionNames.CrewLightMod, SeekerBody.DimVision * SeekerBody.CrewLightCompensation());
+                opt.SetFloat(FloatOptionNames.ImpostorLightMod, SeekerBody.DimVision);
+            }
 
             if (state.IsBlackOut)
                 SetBlind();

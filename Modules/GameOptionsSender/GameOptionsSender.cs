@@ -21,7 +21,7 @@ public abstract class GameOptionsSender
     /// になる (例外もログも出ない)。MarkDirtySettings() を呼ぶ全コード (259 箇所) に効く共通の欠陥なので、
     /// 呼び出し側ごとの再マークではなくここで止める。
     /// </summary>
-    protected virtual bool SendSuppressed => false;
+    protected virtual bool SendSuppressed => SeekerBody.InWindow;
 
     private Il2CppStructArray<byte> BuildOptionArray()
     {
