@@ -24,6 +24,19 @@ internal sealed class ScrollView : Widget
 
     private bool _filled;
 
+    // 欄の中身の描く物が 4096 個ほどを超えると、欄の描く順と切り抜きが壊れて、欄が真っ黒になる
+    // (2026-11-26 実機: 描いた後に数えて 3989 個は正常・4365 個で崩れる。組んだ後に数を減らしても戻らない)。
+    // 中身が多い時は中身を行のまとまりに分け、見えている所の前後のまとまりだけを有効にして、描く前から数を少なく保つ。
+    // 組んだ直後に数えると、字の網の分かれ (TMP の SubMesh) が描く時に後から足される分だけ少ない (同じ日の実機で 0.55〜0.6 倍。
+    // 字によって分かれは増える) ので、分ける境目は低く取る
+    private const int SplitAbove = 600;
+    private const int CellMax = 300;
+    private static readonly List<ScrollView> Split = new();
+    private Transform _content;
+    private float _cellsY = float.NaN;
+    private readonly List<Transform> _cells = new();
+    private readonly List<Vector2> _cellSpans = new(); // 中身の根から見た (下端, 上端)
+
     public UiScreen Inner { get; private set; }
     public Scroller Scroller { get; private set; }
 
@@ -125,6 +138,7 @@ internal sealed class ScrollView : Widget
             go.transform.localPosition = new Vector3(0f, Size.y / 2f - h / 2f, 0f);
             Masked(go.transform);
         }
+        BuildCells(go ? go.transform : null);
         var s = Scroller;
         if (!s) return;
         s.SetBounds(new FloatRange(0f, Math.Max(0f, h - Size.y)), null);
@@ -133,6 +147,74 @@ internal sealed class ScrollView : Widget
         s.Inner.localPosition = new Vector3(ip.x, Math.Clamp(y, 0f, Math.Max(0f, h - Size.y)), ip.z);
         s.UpdateScrollBars();
         if (s.ScrollbarY) s.ScrollbarY.gameObject.SetActive(h > Size.y);
+        ApplyCells();
+    }
+
+    private void BuildCells(Transform root)
+    {
+        _cells.Clear();
+        _cellSpans.Clear();
+        _content = root;
+        _cellsY = float.NaN;
+        if (!root || root.GetComponentsInChildren<Renderer>(true).Length <= SplitAbove) return;
+        for (int i = 0; i < root.childCount; i++) Collect(root, root.GetChild(i));
+        if (_cells.Count > 0 && !Split.Contains(this)) Split.Add(this);
+    }
+
+    // 物が多いまとまりは子に分ける (分けた親が自分で持つ絵は、いつも有効のまま)
+    private void Collect(Transform root, Transform t)
+    {
+        var rs = t.GetComponentsInChildren<Renderer>(true);
+        if (rs.Length == 0) return;
+        if (rs.Length > CellMax && t.childCount > 0)
+        {
+            for (int i = 0; i < t.childCount; i++) Collect(root, t.GetChild(i));
+            return;
+        }
+        float lo = float.MaxValue, hi = float.MinValue;
+        foreach (var r in rs)
+        {
+            // 字の網がまだ作られていない物は大きさが 0 (位置もあてにならない) なので、置き場の位置で数える
+            var b = r.bounds;
+            float min, max;
+            if (b.size.sqrMagnitude > 0f) { min = b.min.y; max = b.max.y; }
+            else min = max = r.transform.position.y;
+            lo = Math.Min(lo, min);
+            hi = Math.Max(hi, max);
+        }
+        var p = t.position;
+        _cells.Add(t);
+        _cellSpans.Add(new Vector2(root.InverseTransformPoint(new Vector3(p.x, lo, p.z)).y, root.InverseTransformPoint(new Vector3(p.x, hi, p.z)).y));
+    }
+
+    // 欄の上下に欄 1 つ分ずつの余白を取り、その中に掛かるまとまりだけを有効にする。
+    // 組んでいる最中は欄の置き場がまだ決まっていないので、欄の中の座標 (スクロールの量と中身の置き場) で求める
+    private void ApplyCells()
+    {
+        if (_cells.Count == 0 || !_content || !Scroller) return;
+        _cellsY = Scroller.Inner.localPosition.y;
+        float offset = _cellsY + _content.localPosition.y;
+        float half = Size.y / 2f * 3f;
+        float top = half - offset, bottom = -half - offset;
+        for (int i = 0; i < _cells.Count; i++)
+        {
+            var t = _cells[i];
+            if (!t) continue;
+            var span = _cellSpans[i];
+            bool on = span.x <= top && span.y >= bottom;
+            if (t.gameObject.activeSelf != on) t.gameObject.SetActive(on);
+        }
+    }
+
+    // 毎フレーム: 分けた欄のうち、スクロールした物だけ有効なまとまりを入れ替える
+    public static void TickAll()
+    {
+        for (int i = Split.Count - 1; i >= 0; i--)
+        {
+            var v = Split[i];
+            if (!v._content || !v.Scroller || v._cells.Count == 0) { Split.RemoveAt(i); continue; }
+            if (v.Scroller.Inner.localPosition.y != v._cellsY) v.ApplyCells();
+        }
     }
 
     // 中身の上端からの位置 y を欄の上端に (端で止める)
@@ -144,6 +226,7 @@ internal sealed class ScrollView : Widget
         var p = s.Inner.localPosition;
         s.Inner.localPosition = new Vector3(p.x, Math.Clamp(y, b.min, b.max), p.z);
         s.UpdateScrollBars();
+        ApplyCells();
     }
 
     // 今のスクロールの位置を控える (画面を閉じる前に呼ぶ)

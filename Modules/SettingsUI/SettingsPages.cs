@@ -310,6 +310,7 @@ internal static class SettingsPagesTick
         SettingsPages.FlushDirty();
         TextField.Tick();
         RolePage.Tick();
+        ScrollView.TickAll();
         SettingsCover.Tick();
         SettingsTheme.Tick();
     }
