@@ -27,6 +27,9 @@ namespace EndKnot.Modules;
 ///   止まっている所を見せないよう、窓の少し前に全員の視界を自分の周りだけまで狭め、窓が閉じるまで暗くする
 ///   (0 にすると自分の姿と名前の下の文字も見えなくなる)。
 /// - Despawn と Spawn の間は空ける。客の手元で同じフレームに重なると、新しい GameManager は Awake で自分を消す。
+///   窓の最中に客が固まって (1.6 秒ほど)、かくれんぼの物の Despawn と通常の物の Spawn を同じフレームで処理すると、
+///   Instance は消えたかくれんぼの物を指したまま残り、その客は試合の終わりまで設定が引けずボタンも押せない。
+///   窓の後で間を空けてもう一度、通常の物だけを出し直す (直し)。消えた物は Awake の判定で無いことになるので、固まった客にも入る。
 /// </summary>
 public static class SeekerBody
 {
@@ -42,6 +45,8 @@ public static class SeekerBody
     private const float CoverLead = 0.4f;
     // SetRole を送ってから会議を開けるようになるまで (本編の客は SetRole の直後に会議が来ると会議の画面が壊れる)
     private const float SettleTime = 2.5f;
+    // 窓を閉じてから直しを始めるまで。客の固まりが明けてから出し直す。SettleTime より短くして、直しが終わるまで通報を預からせる
+    private const float RepairDelay = 2f;
 
     private enum Phase { Idle, Cover, SpawnHns, Send, DespawnHns, SpawnNormal }
 
@@ -70,6 +75,10 @@ public static class SeekerBody
     private static int recoverTries;
     // 自分で送っている間は、送り口の記録で付け直しを予約しない
     private static bool selfSending;
+    // 直しの最中か (かくれんぼの物を出さず、通常の物を出し直すだけ)
+    private static bool repairing;
+    // 直しを始める時刻 (Time.realtimeSinceStartup)。無ければ正の無限大
+    private static float repairAt = float.PositiveInfinity;
 
     /// <summary>窓の最中か (GameManager を差し替えている間)。この間は GameManager.Instance が無いか、かくれんぼの物</summary>
     // 窓の最中に試合が終わると窓は閉じずに残るので、試合の外では窓の最中と見ない (次の試合の始めに Init で戻る)
@@ -117,6 +126,8 @@ public static class SeekerBody
         dimmed.Clear();
         recoverTries = 0;
         selfSending = false;
+        repairing = false;
+        repairAt = float.PositiveInfinity;
     }
 
     /// <summary>
@@ -202,8 +213,9 @@ public static class SeekerBody
     {
         var client = AmongUsClient.Instance;
         if (!client || !client.AmHost || !GameStates.IsInGame) return;
-        if (phase == Phase.Idle && masked.Count == 0) return;
         float now = Time.realtimeSinceStartup;
+        if (phase == Phase.Idle && now >= repairAt) { TryStartRepair(client); return; }
+        if (phase == Phase.Idle && masked.Count == 0) return;
 
         if (phase == Phase.Idle)
         {
@@ -213,6 +225,9 @@ public static class SeekerBody
             foreach (var (id, at) in applyAt) if (now >= at) sending.Add(id);
             if (sending.Count == 0) return;
             foreach (var id in sending) applyAt.Remove(id);
+            // この窓でも通常の物を出し直すので、待っている直しはこの窓の後へ回す
+            repairing = false;
+            repairAt = float.PositiveInfinity;
             Step(client, StartWindow);
             return;
         }
@@ -231,9 +246,28 @@ public static class SeekerBody
         }
     }
 
+    // 直しを始める。会議や試合の終わりが来ていたらやめ、懐中電灯の点け直しの最中は待つ
+    private static void TryStartRepair(InnerNetClient client)
+    {
+        if (!GameStates.IsInTask || GameStates.IsMeeting || MeetingHud.Instance || ExileController.Instance
+            || !GameManager.Instance || !ShipStatus.Instance || ReportDeadBodyPatch.MeetingStarted
+            || GameEndChecker.Ended || GameStates.IsEnded || client.IsGameOver
+            || GameOptionsManager.Instance.currentGameMode != GameModes.Normal)
+        {
+            repairAt = float.PositiveInfinity;
+            return;
+        }
+        if (Flashlight.AnyHolding) return;
+        repairAt = float.PositiveInfinity;
+        repairing = true;
+        sending.Clear();
+        Logger.Info("通常の GameManager を出し直す", nameof(SeekerBody));
+        Step(client, StartWindow);
+    }
+
     private static void StartWindow()
     {
-        Logger.Info($"窓を開ける: [{string.Join(",", sending)}]", nameof(SeekerBody));
+        if (!repairing) Logger.Info($"窓を開ける: [{string.Join(",", sending)}]", nameof(SeekerBody));
         BeginSettling();
         // 暗転の設定は窓に入る前に送る (窓の間は送れない)
         foreach (var pc in Main.AllPlayerControls)
@@ -252,7 +286,7 @@ public static class SeekerBody
             case Phase.Cover:
                 client.Despawn(GameManager.Instance);
                 GameManager.Instance = null;
-                phase = Phase.SpawnHns;
+                phase = repairing ? Phase.SpawnNormal : Phase.SpawnHns;
                 nextAt = now + SpawnGap;
                 break;
             case Phase.SpawnHns:
@@ -290,7 +324,10 @@ public static class SeekerBody
         phase = Phase.Idle;
         recoverTries = 0;
         idleSince = Time.realtimeSinceStartup;
-        Logger.Info("窓を閉じた", nameof(SeekerBody));
+        // かくれんぼの物を出した窓の後にだけ直しを予約する (直しの後には予約しない)
+        repairAt = repairing ? float.PositiveInfinity : idleSince + RepairDelay;
+        Logger.Info(repairing ? "直しを終えた" : "窓を閉じた", nameof(SeekerBody));
+        repairing = false;
         // 暗転を明ける。出し直した GameManager は全員に同じ設定を配ったので、人ごとの設定を送り直す
         dimmed.Clear();
         Utils.MarkEveryoneDirtySettings();
